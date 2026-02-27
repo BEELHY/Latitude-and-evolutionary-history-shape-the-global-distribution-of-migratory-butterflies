@@ -225,18 +225,22 @@ mechanism_df <- ras_meta %>%
   mutate(mean_bio4 = map_dbl(file, ~extract_mechanism_metrics(.x, bio4_ras)))
 
 #rbind
-final_df <- trait_range2 %>%
+final_df <- df_wb %>%
   left_join(mechanism_df %>% dplyr::select(species, season, mean_bio4), 
             by = c("species", "season"))
-
+#pattern model
+m_pattern<- lmer(log10(range_km2) ~ prop_mean+prop_within + season + (1 | species), data = final_df)
 
 # meca model
-m_mechanism <- lmer(log10(range_km2) ~ mean_bio4 + season + (1 | species), data = df_mod)
+m_mechanism <- lmer(log10(range_km2) ~ mean_bio4 + season + (1 | species), data = final_df)
 
 # both model
-m_combined <- lmer(log_range ~ mean_abs_lat + mean_bio4 + (1 | Family/species), data = df_mod)
+m_combined <- lmer(log10(range_km2) ~ prop_mean+prop_within+season+ mean_bio4 + (1 | species), data = final_df)
 
 summary(m_mechanism)
-anova(m_pattern, m_combined) 
+anova(m_pattern, m_combined)
+
+
+
 
 
