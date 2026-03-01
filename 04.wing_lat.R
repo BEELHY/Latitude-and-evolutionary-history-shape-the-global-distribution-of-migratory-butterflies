@@ -64,7 +64,7 @@ lat_metrics_one <- function(f) {
 lat_df <- ras_meta %>%
   mutate(metrics = map(file, lat_metrics_one)) %>%
   unnest(metrics) %>%
-  dplyr(species, season, mean_lat, mean_abs_lat, lat_min, lat_max, lat_span)
+  dplyr::select(species, season, mean_lat, mean_abs_lat, lat_min, lat_max, lat_span)
 
 trait_range2 <- trait_range %>%
   mutate(species_key = str_replace_all(species, " ", "_")) %>%

@@ -128,3 +128,8 @@ ggplot(df_sp_trait, aes(prop_mean, log10(WS_mid))) +
     x = "Mean proportion of range in the tropics",
     y = expression(log[10]*"(wingspan metric)")
   )
+
+
+
+
+#try to see max seasonality
