@@ -10,6 +10,9 @@ library(MuMIn)
 library(dismo)
 library(geodata)
 library(raster)
+library(ape)
+library(brms)
+
 
 # Path
 path <- "data/SuitabilityMaps_MigratorySpecies"
@@ -190,15 +193,6 @@ ggplot(coef_df, aes(x = beta, y = term)) +
 
 
 
-
-
-
-
-
-
-
-
-
 # try to add temperature seasonality data
 path <- "data/climate/wc2.1_10m_bio_4.tif"
 
@@ -241,6 +235,112 @@ summary(m_mechanism)
 anova(m_pattern, m_combined)
 
 
+#############################upadte version try to add Phylogenetic Signal
+path <- "data/phylogenic/ntDegen359_fossils_smith_brown_strategyA.tre"
 
+tree <- read.nexus(path)
+tip_mapping <- tibble(original_label = tree$tip.label) %>%
+  mutate(
+    extracted_name = str_extract(original_label, "[A-Z][a-z]+_[a-z]+(?=(_|$))")
+  )
 
+#manege tree+match species
+final_df_genus <- final_df %>%
+  mutate(genus = str_extract(species, "^[A-Z][a-z]+"))
 
+tip_mapping_genus <- tip_mapping %>%
+  mutate(genus = str_extract(extracted_name, "^[A-Z][a-z]+")) %>%
+  filter(!is.na(genus)) 
+
+exact_matches <- final_df_genus %>%
+  distinct(species, genus) %>%
+  inner_join(tip_mapping_genus, by = c("species" = "extracted_name", "genus" = "genus")) %>%
+  mutate(match_type = "exact")
+
+print(paste("exact_matches:", nrow(exact_matches)))
+#151
+
+#add genus proxy use species in same genus as proxy
+used_exact_tips <- exact_matches$original_label
+
+unmatched_species_indexed <- unmatched_species %>%
+  group_by(genus) %>%
+  mutate(spec_rank = row_number()) %>%
+  ungroup()
+
+available_tips_indexed <- available_tips_for_proxy %>%
+  group_by(genus) %>%
+  mutate(tip_rank = row_number()) %>%
+  ungroup()
+
+genus_proxies <- unmatched_species_indexed %>%
+  inner_join(
+    available_tips_indexed %>% dplyr::select(genus, original_label, tip_rank),
+    by = c("genus" = "genus", "spec_rank" = "tip_rank") 
+  ) %>%
+  mutate(match_type = "genus_proxy") %>%
+  dplyr::select(species, original_label, match_type)
+
+print(paste("add species", nrow(genus_proxies)))
+
+all_matches <- bind_rows(
+  exact_matches %>% dplyr::select(species, original_label, match_type),
+  genus_proxies %>% dplyr::select(species, original_label, match_type)
+)
+
+all_matches_unique <- all_matches %>%
+  group_by(original_label) %>%
+  slice(1) %>% 
+  ungroup()
+
+tree_final <- keep.tip(tree, all_matches_unique$original_label)
+
+tree_final$tip.label <- all_matches_unique$species[match(tree_final$tip.label, all_matches_unique$original_label)]
+
+df_phylo <- final_df %>%
+  filter(species %in% tree_final$tip.label)
+df_phylo <-df_phylo %>%
+  filter(species %in% tree_final$tip.label) %>%
+  mutate(species = factor(species))
+df_phylo$species_phylo <- df_phylo$species
+
+df_phylo_scaled <- df_phylo %>%
+  mutate(
+    mean_bio4_z = as.numeric(scale(mean_bio4)),
+    prop_mean_z = as.numeric(scale(prop_mean)),
+    prop_within_z = as.numeric(scale(prop_within))
+  )
+
+print(paste("final species", length(unique(df_phylo$species))))
+
+#247
+
+#turn to matrix
+if(!is.ultrametric(tree_final)) tree_final <- phytools::force.ultrametric(tree_final)
+A <- vcv.phylo(tree_final)
+
+# model with phylogeny
+m_rapoport_optimized <- brm(
+  log10(range_km2) ~ mean_bio4_z  + prop_mean_z + prop_within_z + season + 
+    (1 | gr(species_phylo, dist = "gaussian")),
+  data = df_phylo_scaled,
+  data2 = list(species_phylo = A),
+  family = gaussian(),
+  prior = c(
+    prior(normal(0, 1), class = "b"),         
+    prior(student_t(3, 0, 1), class = "sd"),  
+    prior(student_t(3, 0, 1), class = "sigma") 
+  ),
+  chains = 4, 
+  iter = 6000,     
+  warmup = 2000,   
+  cores = 4,
+  control = list(
+    adapt_delta = 0.99,       
+    max_treedepth = 15        
+  )
+)
+
+summary(m_rapoport_optimized)
+plot(m_rapoport_optimized)
+bayes_R2(m_rapoport_optimized)
