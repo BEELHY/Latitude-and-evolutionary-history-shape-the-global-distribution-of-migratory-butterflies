@@ -261,7 +261,15 @@ print(paste("exact_matches:", nrow(exact_matches)))
 #151
 
 #add genus proxy use species in same genus as proxy
+unmatched_species <- final_df_genus %>%
+  distinct(species, genus) %>%
+  filter(!species %in% exact_matches$species)
+
 used_exact_tips <- exact_matches$original_label
+
+available_tips_for_proxy <- tip_mapping_genus %>%
+  filter(!original_label %in% used_exact_tips)
+
 
 unmatched_species_indexed <- unmatched_species %>%
   group_by(genus) %>%
