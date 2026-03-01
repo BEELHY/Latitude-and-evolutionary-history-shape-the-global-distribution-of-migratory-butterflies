@@ -35,7 +35,7 @@ migr_trait_calc <- migr_trait %>%
       WS_U
     )
   ) %>% 
-  select(ValidBinomial, Family, WS_L, WS_U)
+  dplyr::select(ValidBinomial, Family, WS_L, WS_U)
 
 migr_trait_calc <- migr_trait_calc %>%
   filter(!if_all(everything(), is.na))

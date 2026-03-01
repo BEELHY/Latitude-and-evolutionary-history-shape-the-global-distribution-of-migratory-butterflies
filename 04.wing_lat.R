@@ -22,7 +22,7 @@ ras_meta <- tibble(file = ras_files) %>%
     season  = str_extract(stem, "S[1-4]"),
     species = str_replace(stem, "^Binary_S[1-4]", "")
   ) %>%
-  select(file, species, season)
+  dplyr::select(file, species, season)
 
 # Latitude metrics from one raster
 lat_metrics_one <- function(f) {
@@ -64,7 +64,7 @@ lat_metrics_one <- function(f) {
 lat_df <- ras_meta %>%
   mutate(metrics = map(file, lat_metrics_one)) %>%
   unnest(metrics) %>%
-  select(species, season, mean_lat, mean_abs_lat, lat_min, lat_max, lat_span)
+  dplyr(species, season, mean_lat, mean_abs_lat, lat_min, lat_max, lat_span)
 
 trait_range2 <- trait_range %>%
   mutate(species_key = str_replace_all(species, " ", "_")) %>%
@@ -72,7 +72,7 @@ trait_range2 <- trait_range %>%
     lat_df %>% rename(species_key = species),
     by = c("species_key", "season")
   ) %>%
-  select(-species_key)
+  dplyr::select(-species_key)
 
 # Species-level latitude (abs) + traits (WS_L, WS_U)
 df_lat_sp <- trait_range2 %>%

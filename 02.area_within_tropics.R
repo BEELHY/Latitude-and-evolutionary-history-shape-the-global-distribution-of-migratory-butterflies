@@ -30,7 +30,7 @@ meta <- tibble(file = files) %>%
     season  = str_match(stem, "^Binary_(S[1-4])")[,2],
     species = str_match(stem, "^Binary_(S[1-4])(.*)$")[,3]
   ) %>%
-  select(file, species, season)
+  dplyr::select(file, species, season)
 
 tropic_lat <- 23.4366
 
@@ -65,7 +65,7 @@ out <- meta %>%
   mutate(tmp = list(calc_metrics(file))) %>%
   tidyr::unnest(tmp) %>%
   ungroup() %>%
-  select(species, season, prop_tropics, range_km2) %>%
+  dplyr::select(species, season, prop_tropics, range_km2) %>%
   arrange(species, season)
 
 # Export output
