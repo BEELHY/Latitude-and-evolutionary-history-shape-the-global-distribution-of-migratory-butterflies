@@ -130,6 +130,3 @@ ggplot(df_sp_trait, aes(prop_mean, log10(WS_mid))) +
   )
 
 
-
-
-#try to see max seasonality

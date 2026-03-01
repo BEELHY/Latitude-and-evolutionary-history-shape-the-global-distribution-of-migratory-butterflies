@@ -238,10 +238,11 @@ anova(m_pattern, m_mechanism)
 ########################if 1 season has dominated effect?
 m_pattern_season<- lmer(log10(range_km2) ~ (prop_within +prop_mean)*season + (1 | species), data = final_df)
 summary(m_pattern_season)
+
 #season?
 m_mechanism_season<- lmer(log10(range_km2) ~ (mean_bio4 +prop_within)* season + (1 | species), data = final_df)
 summary(m_mechanism_season)
-
+# no seasonal interaction
 
 
 #############################upadte version try to add Phylogenetic Signal
@@ -338,7 +339,7 @@ A <- vcv.phylo(tree_final)
 
 # model with phylogeny
 m_rapoport_optimized <- brm(
-  log10(range_km2) ~ mean_bio4_z  + prop_mean_z + prop_within_z + season + 
+  log10(range_km2) ~ mean_bio4_z  + prop_within_z + season + 
     (1 | gr(species_phylo, dist = "gaussian")),
   data = df_phylo_scaled,
   data2 = list(species_phylo = A),
