@@ -129,4 +129,71 @@ ggplot(df_sp_trait, aes(prop_mean, log10(WS_mid))) +
     y = expression(log[10]*"(wingspan metric)")
   )
 
+######################################
+# Coefficient plot
+# extract betas + Wald CIs
+terms <- c("prop_mean", "prop_within")
+se_fix <- sqrt(diag(vcov(m_wb_p)))[terms]
+beta   <- fixef(m_wb_p)[terms]
+
+coef_df <- data.frame(
+  term = c("Between-species tropicality (prop_mean)",
+           "Within-species seasonal deviation (prop_within)"),
+  beta = as.numeric(beta),
+  lwr  = as.numeric(beta - 1.96 * se_fix),
+  upr  = as.numeric(beta + 1.96 * se_fix)
+)
+
+ggplot(coef_df, aes(x = beta, y = term)) +
+  geom_vline(xintercept = 0, linetype = 2) +
+  geom_errorbarh(aes(xmin = lwr, xmax = upr), height = 0.2) +
+  geom_point(size = 2) +
+  theme_classic() +
+  labs(x = "Effect on log10(range_km2)", y = NULL)
+
+
+
+# try to add temperature seasonality data
+path <- "data/climate/wc2.1_10m_bio_4.tif"
+
+bio4_ras <- rast(path)
+
+#get data+calculate mean
+extract_mechanism_metrics <- function(f, bio_layer) {
+  r <- rast(f)
+  if (!is.lonlat(r)) r <- project(r, "EPSG:4326", method = "near")
+  
+  bio_layer <- resample(bio_layer, r, method="bilinear") 
+  
+  occ <- (r == 1)
+  if (global(occ, "sum", na.rm = TRUE)[1, 1] == 0) return(NA_real_)
+  
+  occ_bio <- mask(bio_layer, r, maskvalues = 0)
+  
+  mean_bio4 <- global(occ_bio, "mean", na.rm = TRUE)[1, 1]
+  return(mean_bio4)
+}
+
+# calculation
+mechanism_df <- ras_meta %>%
+  mutate(mean_bio4 = map_dbl(file, ~extract_mechanism_metrics(.x, bio4_ras)))
+
+#rbind
+final_df <- df_wb %>%
+  left_join(mechanism_df %>% dplyr::select(species, season, mean_bio4), 
+            by = c("species", "season"))
+#pattern model
+m_pattern<- lmer(log10(range_km2) ~ prop_mean+prop_within + season + (1 | species), data = final_df)
+
+# meca model
+m_mechanism <- lmer(log10(range_km2) ~ mean_bio4 +prop_within+ season + (1 | species), data = final_df)
+
+# both model
+m_combined <- lmer(log10(range_km2) ~ prop_mean+prop_within+season+ mean_bio4 + (1 | species), data = final_df)
+
+summary(m_combined)
+anova(m_pattern, m_mechanism)
+
+
+
 
