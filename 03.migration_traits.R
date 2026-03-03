@@ -91,6 +91,8 @@ m_U2 <- lmer(log10(WS_U) ~ prop_mean + log10(range_km2) + (1 | Family),
 summary(m_L2)
 summary(m_U2)
 
+#prop_mean not significante
+
 # Interpretable trend
 effect_per_0.1 <- function(mod, term = "prop_mean", delta = 0.1) {
   coefs <- summary(mod)$coefficients
