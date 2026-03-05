@@ -140,6 +140,23 @@ labs(
 #phylo
 
 
+df_phylo_data <- df_sp_level %>%
+  mutate(log_Range = log10(mean_range)) %>%
+  dplyr::select(species, Family, log_Range)
+
+
+rownames(trait_heatmap) <- trait_heatmap$species
+trait_heatmap$species <- NULL 
+
+p_tree <- ggtree(tree_final, layout = "rectangular") + 
+  geom_tiplab(size = 0, color = "transparent") 
+
+p_3_1 <- gheatmap(p_tree, trait_heatmap, offset = 0.02, width = 0.2,
+                  colnames_angle = 0, colnames_offset_y = 1) +
+  scale_fill_viridis_c(option = "viridis", name = "log10 Scale") +
+  labs(title = "Figure 3.1: Phylogenetic Distribution of Traits")
+
+p_3_1
 
 
 model_fixef <- m_rapoport_with_size_U %>%
