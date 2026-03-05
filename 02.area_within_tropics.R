@@ -231,6 +231,7 @@ m_mechanism <- lmer(log10(range_km2) ~ mean_bio4 +prop_within+ season + (1 | spe
 # both model
 m_combined <- lmer(log10(range_km2) ~ prop_mean+prop_within+season+ mean_bio4 + (1 | species), data = final_df)
 
+summary(m_pattern)
 summary(m_combined)
 anova(m_pattern, m_mechanism)
 

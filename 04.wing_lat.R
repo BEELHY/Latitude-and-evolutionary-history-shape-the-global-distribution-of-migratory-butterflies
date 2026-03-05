@@ -131,3 +131,71 @@ effect_per_deg <- function(mod, term = "abs_lat", delta = 10) {
 
 effect_per_deg(m_lat_L, delta = 10)
 effect_per_deg(m_lat_U, delta = 10)
+
+#### add in rapport
+df_lat_sp <- df_lat_sp %>%
+  mutate(species = str_replace_all(species, " ", "_"))
+
+df_combined <- df_phylo_scaled %>%
+  left_join(df_lat_sp %>% dplyr::select(species, WS_L, WS_U), by = "species")
+
+df_model_WS_L <- df_combined %>%
+  filter(!is.na(WS_L), WS_L > 0) %>%
+  mutate(
+    log_WS_L_z = as.numeric(scale(log10(WS_L))) 
+  )
+
+df_model_WS_U <- df_combined %>%
+  filter(!is.na(WS_U), WS_U > 0) %>%
+  mutate(
+    log_WS_U_z = as.numeric(scale(log10(WS_U))) 
+  )
+
+cat("WS_L:", length(unique(df_model_WS_L$species)), "\n")
+cat("WS_U:", length(unique(df_model_WS_U$species)), "\n")
+
+m_rapoport_with_size_L <- brm(
+  log10(range_km2) ~ mean_bio4_z + prop_within_z + log_WS_L_z + season + 
+    (1 | gr(species_phylo, dist = "gaussian")),
+  data = df_model_WS_L,
+  data2 = list(species_phylo = A),
+  family = gaussian(),
+  prior = c(
+    prior(normal(0, 1), class = "b"),         
+    prior(exponential(1), class = "sd"),     
+    prior(exponential(1), class = "sigma") 
+  ),
+  chains = 4, 
+  iter = 6000,     
+  warmup = 2000,   
+  cores = 4,
+  control = list(
+    adapt_delta = 0.99,       
+    max_treedepth = 15        
+  )
+)
+
+m_rapoport_with_size_U <- brm(
+  log10(range_km2) ~ mean_bio4_z + prop_within_z + log_WS_U_z + season + 
+    (1 | gr(species_phylo, dist = "gaussian")),
+  data = df_model_WS_U,
+  data2 = list(species_phylo = A),
+  family = gaussian(),
+  prior = c(
+    prior(normal(0, 1), class = "b"),         
+    prior(exponential(1), class = "sd"),     
+    prior(exponential(1), class = "sigma") 
+  ),
+  chains = 4, 
+  iter = 6000,     
+  warmup = 2000,   
+  cores = 4,
+  control = list(
+    adapt_delta = 0.99,       
+    max_treedepth = 15        
+  )
+)
+
+summary(m_rapoport_with_size_L)
+summary(m_rapoport_with_size_U)
+
