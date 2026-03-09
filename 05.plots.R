@@ -1,4 +1,5 @@
 library(ggplot2)
+library(phytools)
 library(dplyr)
 library(ggeffects)
 library(tidyr)
@@ -6,7 +7,9 @@ library(viridis)
 library(ggtree)
 library(tidybayes)
 library(broom.mixed)
+library(ggnewscale)
 library(ggtreeExtra)
+library(stringr)
 
 
 df_plot2_1 <- df_lat_sp %>%
@@ -139,24 +142,64 @@ labs(
 
 #phylo
 
+family_data <- df_lat_sp %>%
+  mutate(species = str_replace_all(species, " ", "_")) %>%
+  distinct(species, Family)
 
-df_phylo_data <- df_sp_level %>%
+df_phylo_final <- df_sp_level %>%
+  mutate(species = str_replace_all(species, " ", "_")) %>%
+  left_join(family_data, by = "species") %>%
   mutate(log_Range = log10(mean_range)) %>%
-  dplyr::select(species, Family, log_Range)
+  filter(species %in% tree_final$tip.label) %>%
+  as.data.frame()
+
+df_tree_side <- df_phylo_final %>%
+  rename(label = species) %>%
+  select(label, Family) %>%
+  as.data.frame()
+
+df_fruit_side <- df_phylo_final %>%
+  rename(label = species, 
+         Family_Bar = Family,   
+         Range_Val = log_Range) %>% 
+  select(label, Family_Bar, Range_Val) %>%
+  as.data.frame()
 
 
-rownames(trait_heatmap) <- trait_heatmap$species
-trait_heatmap$species <- NULL 
+p_final <- ggtree(tree_final, layout = "fan", open.angle = 15, linewidth = 0.3) %<+% df_tree_side
 
-p_tree <- ggtree(tree_final, layout = "rectangular") + 
-  geom_tiplab(size = 0, color = "transparent") 
+p_final <- p_final + geom_tree(aes(color = Family), linewidth = 0.6)
 
-p_3_1 <- gheatmap(p_tree, trait_heatmap, offset = 0.02, width = 0.2,
-                  colnames_angle = 0, colnames_offset_y = 1) +
-  scale_fill_viridis_c(option = "viridis", name = "log10 Scale") +
-  labs(title = "Figure 3.1: Phylogenetic Distribution of Traits")
+p_final <- p_final + 
+  geom_fruit(
+    data = df_fruit_side,
+    geom = geom_bar,
+    mapping = aes(y = label, x = Range_Val, fill = Family_Bar), # 使用新列名
+    stat = "identity",
+    orientation = "y",      
+    pwidth = 0.3,           
+    offset = 0.1,           
+    axis.params = list(
+      axis = "x",          
+      text.size = 2,       
+      title = "log10 Range",
+      title.size = 3
+    )
+  )
 
-p_3_1
+p_final <- p_final +
+  scale_color_brewer(palette = "Set1", name = "Butterfly Family") +
+  scale_fill_brewer(palette = "Set1", name = "Butterfly Family") +
+  theme(
+    legend.position = "right",
+    legend.title = element_text(size = 10, face = "bold"),
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold")
+  ) +
+  labs(title = "Phylogenetic Distribution of Geographic Range")
+
+print(p_final)
+
+
 
 
 model_fixef <- m_rapoport_with_size_U %>%
@@ -202,6 +245,44 @@ p_3_3
 
 
 
+#p3-1 new
+df_tree_core <- df_plot_final %>%
+  select(label, Range_Val) %>%
+  rename(Range_Branch = Range_Val) %>% 
+  as.data.frame()
 
+df_ring_ext <- df_plot_final %>%
+  select(label, Family) %>%
+  rename(Family_Ring = Family) %>% 
+  as.data.frame()
+
+p_clean <- ggtree(tree_final, layout = "fan", open.angle = 15, linewidth = 0.5) %<+% df_tree_core
+
+p_clean <- p_clean + 
+  geom_tree(aes(color = Range_Branch), linewidth = 0.8) +
+  scale_color_viridis_c(option = "viridis", name = "Evolutionary\nRange (log10)")
+
+
+
+p_clean <- p_clean +
+  new_scale_fill() + 
+  geom_fruit(
+    data = df_ring_ext,
+    geom = geom_tile,
+    mapping = aes(y = label, fill = Family_Ring),
+    width = 1,      
+    offset = 0.1     
+  ) +
+  scale_fill_brewer(palette = "Set1", name = "Butterfly Family")
+
+p_clean <- p_clean +
+  theme(
+    legend.position = "right",
+    legend.box = "vertical",
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15)
+  ) +
+  labs(title = "Phylogenetic Signal in Geographic Range")
+
+print(p_clean)
 
 
