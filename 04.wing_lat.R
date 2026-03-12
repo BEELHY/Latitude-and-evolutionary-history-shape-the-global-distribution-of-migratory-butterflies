@@ -199,3 +199,13 @@ m_rapoport_with_size_U <- brm(
 summary(m_rapoport_with_size_L)
 summary(m_rapoport_with_size_U)
 
+
+#SIZE AND RANGE?
+
+
+
+
+
+
+
+

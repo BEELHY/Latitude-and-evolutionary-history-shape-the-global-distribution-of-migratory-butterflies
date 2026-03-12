@@ -124,7 +124,7 @@ df_sp_level <- df_synthesis %>%
 ggplot(df_sp_level, aes(x = log10(WS_U), y = log10(mean_range))) +
   geom_point(aes(color = prop_mean), size = 2.5, alpha = 0.7) +
   geom_smooth(method = "lm", color = "black", linetype = "dashed", se = TRUE, fill = "grey80") +
-  scale_color_viridis_c(option = "plasma", name = "Absolute\nLatitude (°)") +
+  scale_color_viridis_c(option = "plasma", name = "Tropical propotion") +
   scale_shape_manual(values = c(16, 17, 15, 18, 25))+
 labs(
     title = "Figure 2.4: Synthesis of Size and Range Dynamics",
@@ -155,14 +155,14 @@ df_phylo_final <- df_sp_level %>%
 
 df_tree_side <- df_phylo_final %>%
   rename(label = species) %>%
-  select(label, Family) %>%
+  dplyr::select(label, Family) %>%
   as.data.frame()
 
 df_fruit_side <- df_phylo_final %>%
   rename(label = species, 
          Family_Bar = Family,   
          Range_Val = log_Range) %>% 
-  select(label, Family_Bar, Range_Val) %>%
+  dplyr::select(label, Family_Bar, Range_Val) %>%
   as.data.frame()
 
 
@@ -246,43 +246,87 @@ p_3_3
 
 
 #p3-1 new
-df_tree_core <- df_plot_final %>%
-  select(label, Range_Val) %>%
-  rename(Range_Branch = Range_Val) %>% 
+df_plot_final <- df_phylo_final %>%
+  rename(label = species) %>%
+  mutate(Range_Val = log10(mean_range)) %>%
+  as.data.frame()
+species_to_keep <- intersect(tree_final$tip.label, df_plot_final$label)
+tree_pruned <- keep.tip(tree_final, species_to_keep)
+
+# 2. 祖先重建 (ASR)
+range_vec <- df_plot_final$Range_Val
+names(range_vec) <- df_plot_final$label
+range_vec <- range_vec[tree_pruned$tip.label]
+anc_res <- fastAnc(tree_pruned, range_vec)
+
+# 3. 【数据隔离核心】：给每一层要用的变量取不同的名字
+# A. 树枝颜色专用 (注入树内部)
+df_for_tree_branches <- data.frame(label = names(range_vec), Range_Color_Branch = as.numeric(range_vec))
+df_for_tree_nodes <- data.frame(node = as.integer(names(anc_res)), Range_Color_Node = as.numeric(anc_res))
+
+# B. 外圈色环专用 (外部传入 geom_fruit)
+df_for_fruit_ring <- df_plot_final %>%
+  filter(label %in% tree_pruned$tip.label) %>%
+  dplyr::select(label, Family) %>%
+  rename(Family_Identity_Ring = Family) %>% # 唯一列名
   as.data.frame()
 
-df_ring_ext <- df_plot_final %>%
-  select(label, Family) %>%
-  rename(Family_Ring = Family) %>% 
-  as.data.frame()
-
-p_clean <- ggtree(tree_final, layout = "fan", open.angle = 15, linewidth = 0.5) %<+% df_tree_core
-
-p_clean <- p_clean + 
-  geom_tree(aes(color = Range_Branch), linewidth = 0.8) +
-  scale_color_viridis_c(option = "viridis", name = "Evolutionary\nRange (log10)")
+# C. 文字标签专用 (外部传入 geom_fruit)
+df_for_fruit_text <- df_for_fruit_ring %>%
+  group_by(Family_Identity_Ring) %>%
+  summarise(label = label[ceiling(n()/2)], .groups = "drop") %>%
+  rename(Family_Name_Text = Family_Identity_Ring) # 唯一列名
 
 
+# A. 初始化树
+p_iter <- ggtree(tree_pruned, layout = "fan", open.angle = 15, linewidth = 0.5)
 
-p_clean <- p_clean +
+# B. 手动注入树枝颜色数据 (只注入颜色需要的数值)
+p_iter$data <- p_iter$data %>%
+  left_join(df_for_tree_branches, by = "label") %>%
+  left_join(df_for_tree_nodes, by = "node") %>%
+  mutate(Final_Evolutionary_Value = coalesce(Range_Color_Branch, Range_Color_Node))
+
+# C. 绘制彩色全树 (使用 Final_Evolutionary_Value)
+p_iter <- p_iter + 
+  aes(color = Final_Evolutionary_Value) + 
+  geom_tree(linewidth = 0.8) +
+  scale_color_viridis_c(option = "viridis", name = "log10 Range\n(Evolutionary)")
+
+# D. 添加 Family 厚色环 (使用 Family_Identity_Ring)
+p_iter <- p_iter +
   new_scale_fill() + 
   geom_fruit(
-    data = df_ring_ext,
+    data = df_for_fruit_ring,
     geom = geom_tile,
-    mapping = aes(y = label, fill = Family_Ring),
-    width = 1,      
-    offset = 0.1     
+    mapping = aes(y = label, fill = Family_Identity_Ring),
+    width = 1.2,      # 大宽度使其连成环
+    offset = 0.1,
+    linewidth = 0
   ) +
-  scale_fill_brewer(palette = "Set1", name = "Butterfly Family")
+  scale_fill_brewer(palette = "Set1",  guide = "none") 
 
-p_clean <- p_clean +
+# E. 在圆弧上方标注 Family 名字 (使用 Family_Name_Text)
+p_iter <- p_iter +
+  geom_fruit(
+    data = df_for_fruit_text,
+    geom = geom_text,
+    mapping = aes(y = label, label = Family_Name_Text),
+    offset = 0.5,      # 放在色环外侧
+    size = 4,
+    fontface = "bold",
+    hjust = 0.5,
+    check_overlap = TRUE
+  )
+
+# F. 最终修饰
+p_iter <- p_iter +
   theme(
     legend.position = "right",
-    legend.box = "vertical",
     plot.title = element_text(hjust = 0.5, face = "bold", size = 15)
   ) +
-  labs(title = "Phylogenetic Signal in Geographic Range")
+  labs(title = "Phylogenetic Signal in Butterfly Geographic Range")
 
-print(p_clean)
-
+# 打印
+print(p_iter)
 

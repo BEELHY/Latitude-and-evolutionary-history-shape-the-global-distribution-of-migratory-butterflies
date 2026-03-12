@@ -45,7 +45,7 @@ plan <- tibble(path = files,
     sp_prev = m[,4],
     ext    = m[,5]
   ) %>%
-  select(-m) %>%
+  dplyr::select(-m) %>%
   left_join(tax_map, by = c("sp_prev" = "species_prev")) %>%
   mutate(
     new_file = if_else(!is.na(species_up),
@@ -56,7 +56,7 @@ plan <- tibble(path = files,
 
 # Inspect what will change
 to_change <- plan %>% filter(file != new_file)
-to_change %>% select(file, new_file)
+to_change %>%  dplyr::select(file, new_file)
 
 # Safety check: avoid collisions (two old files -> same new name)
 stopifnot(!any(duplicated(to_change$new_path)))
