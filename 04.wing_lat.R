@@ -137,7 +137,7 @@ df_lat_sp <- df_lat_sp %>%
   mutate(species = str_replace_all(species, " ", "_"))
 
 df_combined <- df_phylo_scaled %>%
-  left_join(df_lat_sp %>% dplyr::select(species, WS_L, WS_U), by = "species")
+  left_join(df_lat_sp %>% dplyr::select(abs_lat, species, WS_L, WS_U), by = "species")
 
 df_model_WS_L <- df_combined %>%
   filter(!is.na(WS_L), WS_L > 0) %>%
@@ -201,11 +201,24 @@ summary(m_rapoport_with_size_U)
 
 
 #SIZE AND RANGE?
+final_df_lat <- final_df %>%
+ left_join(df_lat_sp , by = "species")
 
+m_pattern_lat<- lmer(log10(range_km2) ~ abs_lat+prop_within + season + (1 | species), data = final_df_lat)
+summary(m_pattern_lat)
 
+m_pattern<- lmer(log10(range_km2) ~ prop_mean+prop_within + season + (1 | species), data = final_df_lat)
 
+anova(m_pattern,m_pattern_lat)
 
+#m_pattern better
 
+#try ratio log(size/range)
+#dispersal ability vs. T. adaptability
+final_df_lat <- final_df_lat %>%
+  mutate(expansion_efficiency = log10(range_km2) - log10(WS_L))
 
+m_efficiency <- lmer(expansion_efficiency ~ abs_lat + prop_within + season + (1 | species), 
+                     data = final_df_lat)
 
-
+summary(m_efficiency)
