@@ -329,11 +329,10 @@ ggplot() +
   geom_ribbon(data = pred_eff, aes(x = abs_lat, ymin = conf.low, ymax = conf.high), 
               fill = "steelblue", alpha = 0.2) +
   geom_point(data = final_df_lat, 
-             aes(x = abs_lat, y = expansion_efficiency, color = abs_lat, shape = Family), 
+             aes(x = abs_lat, y = expansion_efficiency, shape = Family), 
              alpha = 0.5, size = 2) +
   geom_line(data = pred_eff, aes(x = abs_lat, y = eff_pred), 
             color = "steelblue", linewidth = 1.2) +
-  scale_color_viridis_c(option = "plasma", name = "Abs. Latitude") +
   scale_shape_manual(values = c(16, 17, 15, 18, 25)) + 
   annotate("text", x = 5, y = max(final_df_lat$expansion_efficiency), 
            label = "Tropics: Large Body,\nSmall Range-per-size", 
