@@ -332,7 +332,7 @@ p_iter <- p_iter +
     offset = 0.08,    
     linewidth = 0
   ) +
-  scale_fill_brewer(palette = "Set1",  guide = "none") 
+  scale_fill_brewer(palette = "Set3",  guide = "none") 
 
 # 4. The Family Text Labels (Pushed further outward)
 p_iter <- p_iter +
@@ -345,7 +345,7 @@ p_iter <- p_iter +
       # Here is the magic math that curves it and keeps it right-side up!
       angle = ifelse(angle > 180, angle + 90, angle - 90) 
     ),
-    offset = 0.25,    # You may need to tweak this slightly (e.g., 0.2 or 0.3)
+    offset = 0.65,    # You may need to tweak this slightly (e.g., 0.2 or 0.3)
     size = 4.5,
     fontface = "bold",
     hjust = 0.5,      # <-- Changed back to 0.5 so the word is centered over its group
@@ -361,3 +361,48 @@ p_iter <- p_iter +
   labs(title = "Phylogenetic Signal in Butterfly Geographic Range")
 
 print(p_iter)
+
+
+
+######## try merge a histogram
+library(patchwork)
+# We add this to your existing p_iter. 
+# Adjust the first number in xlim (e.g., -50) to make the root longer or shorter.
+p_iter <- p_iter + 
+  scale_x_continuous(expand = expansion(mult = c(0.2, 0.1))) + # Adds padding
+  geom_rootedge(rootedge = 75) # Physically draws the root line if your tree object has one
+
+p_hist <- ggplot(df_plot_final, aes(x = Range_Val, fill = ..count..)) +
+  geom_histogram(bins = 30, color = "white", show.legend = FALSE) +
+  scale_fill_viridis_c(option = "plasma") +
+  labs(x = "log(Distribution Range)", y = "Frequency") +
+  theme_minimal(base_size = 10) +
+  theme(
+    # These three lines make the background disappear
+    panel.background = element_blank(), 
+    plot.background = element_blank(),
+    panel.border = element_blank(),
+    
+    # Optional: Keep or remove grid lines depending on how "clean" you want it
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    
+    # Text styling
+    axis.title = element_text(size = 8, face = "bold"),
+    axis.text = element_text(size = 8,face = "bold"),
+  )
+# This "inserts" the histogram into the layout. 
+# The 'inset_element' function places the histogram over the tree plot.
+final_plot <- p_iter + 
+  inset_element(
+    p_hist, 
+    left = 0.32,   
+    bottom = 0.35, 
+    right = 0.54,  
+    top = 0.58,
+    align_to = 'full'
+  )
+
+# Display the result
+print(final_plot)
+
