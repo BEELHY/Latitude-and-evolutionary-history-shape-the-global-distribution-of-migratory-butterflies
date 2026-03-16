@@ -9,6 +9,9 @@ library(tidybayes)
 library(broom.mixed)
 library(ggnewscale)
 library(ggtreeExtra)
+library(sjPlot)      
+library(ggeffects)   
+library(ggplot2)
 library(stringr)
 
 
@@ -139,6 +142,24 @@ labs(
     plot.title = element_text(face = "bold")
   )
 
+#new plot 2.4
+predictions_clean <- ggpredict(m_clean, terms = c("log_WS", "abs_lat [0, 18.2, 40, 60]"))
+
+clean_plot <- plot(predictions_clean) +
+  labs(
+    title = "Effect of Wing Size on Range Size Across Latitudes",
+    x = "Wing Size (log10)", 
+    y = "Predicted Range Size (log10 km²)",
+    color = "Absolute Latitude"
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 12),
+    plot.title = element_text(face = "bold", hjust = 0.5)
+  )
+
+print(clean_plot)
+
 
 #phylo
 
@@ -201,7 +222,7 @@ print(p_final)
 
 
 
-
+##other related plots
 model_fixef <- m_rapoport_with_size_U %>%
   gather_draws(`b_.*`, regex = TRUE) %>%
   mutate(.variable = str_remove(.variable, "b_")) %>% 
@@ -275,82 +296,63 @@ df_for_fruit_text <- df_for_fruit_ring %>%
   summarise(label = label[ceiling(n()/2)], .groups = "drop") %>%
   rename(Family_Name_Text = Family_Identity_Ring) 
 
-
 p_iter <- ggtree(tree_pruned, layout = "fan", open.angle = 15, linewidth = 0.5)
 
 p_iter$data <- p_iter$data %>%
   left_join(df_for_tree_branches, by = "label") %>%
   left_join(df_for_tree_nodes, by = "node") %>%
   mutate(Final_Evolutionary_Value = coalesce(Range_Color_Branch, Range_Color_Node))
-
+# 1. Base Tree (Updated legend title)
 p_iter <- p_iter + 
   aes(color = Final_Evolutionary_Value) + 
   geom_tree(linewidth = 0.8) +
-  scale_color_viridis_c(option = "viridis", name = "log10 Range\n(Evolutionary)")
+  scale_color_viridis_c(option = "viridis", name = "log10 Range Size")
 
+# 2. The Species Trait Ring (Legend removed)
+p_iter <- p_iter +
+  new_scale_fill() + 
+  geom_fruit(
+    data = df_plot_final,
+    geom = geom_tile,
+    mapping = aes(y = label, fill = Range_Val),
+    width = 10,       
+    offset = 0.05,    
+    linewidth = 0
+  ) +
+  scale_fill_viridis_c(option = "viridis", guide = "none") # Hides the duplicate legend!
+
+# 3. The Family Ring (Unchanged)
 p_iter <- p_iter +
   new_scale_fill() + 
   geom_fruit(
     data = df_for_fruit_ring,
     geom = geom_tile,
     mapping = aes(y = label, fill = Family_Identity_Ring),
-    width = 1.2,     
-    offset = 0.1,
+    width = 5,        
+    offset = 0.08,    
     linewidth = 0
   ) +
   scale_fill_brewer(palette = "Set1",  guide = "none") 
 
+# 4. The Family Text Labels (Pushed further outward)
 p_iter <- p_iter +
   geom_fruit(
     data = df_for_fruit_text,
     geom = geom_text,
     mapping = aes(y = label, label = Family_Name_Text),
-    offset = 0.5,     
-    size = 4,
+    offset = 0.3,     # <-- INCREASED from 0.15 to jump completely over the thick rings
+    size = 4.5,
     fontface = "bold",
-    hjust = 0.5,
+    hjust = 0,        # <-- Ensures text grows strictly outward from the offset point
     check_overlap = TRUE
   )
 
+# 5. Theme and Titles
 p_iter <- p_iter +
   theme(
     legend.position = "right",
     plot.title = element_text(hjust = 0.5, face = "bold", size = 15)
   ) +
   labs(title = "Phylogenetic Signal in Butterfly Geographic Range")
+
 print(p_iter)
-
-#new plot 2.4
-pred_eff <- predict_response(m_efficiency, terms = "abs_lat") %>%
-  as_tibble() %>%
-  rename(abs_lat = x, eff_pred = predicted)
-
-ggplot() +
-  geom_ribbon(data = pred_eff, aes(x = abs_lat, ymin = conf.low, ymax = conf.high), 
-              fill = "steelblue", alpha = 0.2) +
-  geom_point(data = final_df_lat, 
-             aes(x = abs_lat, y = expansion_efficiency, shape = Family), 
-             alpha = 0.5, size = 2) +
-  geom_line(data = pred_eff, aes(x = abs_lat, y = eff_pred), 
-            color = "steelblue", linewidth = 1.2) +
-  scale_shape_manual(values = c(16, 17, 15, 18, 25)) + 
-  annotate("text", x = 5, y = max(final_df_lat$expansion_efficiency), 
-           label = "Tropics: Large Body,\nSmall Range-per-size", 
-           hjust = 0, size = 3.5, fontface = "italic") +
-  annotate("text", x = 45, y = min(final_df_lat$expansion_efficiency), 
-           label = "High Lat: Small Body,\nLarge Range-per-size", 
-           hjust = 0, size = 3.5, fontface = "italic") +
-  labs(
-    title = "Figure 2.5: Scaling of Geographic Expansion Efficiency",
-    subtitle = expression(paste("Model: ", log[10], "(Range/Size) ~ Absolute Latitude")),
-    x = "Absolute Latitude (°)",
-    y = expression(log[10] * "(Range / Wing Span)"),
-    caption = "Points represent individual species-season observations."
-  ) +
-  theme_classic() +
-  theme(
-    legend.position = "right",
-    plot.title = element_text(face = "bold", size = 14),
-    axis.title = element_text(size = 12)
-  )
-

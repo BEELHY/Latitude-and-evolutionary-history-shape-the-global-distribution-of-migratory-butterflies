@@ -215,8 +215,15 @@ anova(m_pattern,m_pattern_lat)
 
 #try ratio log(size/range)
 #dispersal ability vs. T. adaptability
+
 final_df_lat <- final_df_lat %>%
   mutate(expansion_efficiency = log10(range_km2) - log10(WS_L))
+
+m_interact<- lmer(log10(range_km2) ~ abs_lat*log10(WS_L) + prop_within + season + (1 | species), 
+                  data = final_df_lat)
+summary(m_interact)
+#relationship between wing size and range size changes depending on latitude
+
 
 m_efficiency <- lmer(expansion_efficiency ~ abs_lat + prop_within + season + (1 | species), 
                      data = final_df_lat)
