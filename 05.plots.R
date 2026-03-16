@@ -339,11 +339,16 @@ p_iter <- p_iter +
   geom_fruit(
     data = df_for_fruit_text,
     geom = geom_text,
-    mapping = aes(y = label, label = Family_Name_Text),
-    offset = 0.3,     # <-- INCREASED from 0.15 to jump completely over the thick rings
+    mapping = aes(
+      y = label, 
+      label = Family_Name_Text,
+      # Here is the magic math that curves it and keeps it right-side up!
+      angle = ifelse(angle > 180, angle + 90, angle - 90) 
+    ),
+    offset = 0.25,    # You may need to tweak this slightly (e.g., 0.2 or 0.3)
     size = 4.5,
     fontface = "bold",
-    hjust = 0,        # <-- Ensures text grows strictly outward from the offset point
+    hjust = 0.5,      # <-- Changed back to 0.5 so the word is centered over its group
     check_overlap = TRUE
   )
 
