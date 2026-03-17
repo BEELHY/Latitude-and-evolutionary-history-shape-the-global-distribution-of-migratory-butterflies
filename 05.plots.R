@@ -406,3 +406,142 @@ final_plot <- p_iter +
 # Display the result
 print(final_plot)
 
+
+
+
+#####try with no log p3-1 new
+df_plot_final <- df_phylo_final %>%
+  rename(label = species) %>%
+  mutate(Range_Val = mean_range) %>%
+  as.data.frame()
+species_to_keep <- intersect(tree_final$tip.label, df_plot_final$label)
+tree_pruned <- keep.tip(tree_final, species_to_keep)
+
+range_vec <- df_plot_final$Range_Val
+names(range_vec) <- df_plot_final$label
+range_vec <- range_vec[tree_pruned$tip.label]
+anc_res <- fastAnc(tree_pruned, range_vec)
+
+df_for_tree_branches <- data.frame(label = names(range_vec), Range_Color_Branch = as.numeric(range_vec))
+df_for_tree_nodes <- data.frame(node = as.integer(names(anc_res)), Range_Color_Node = as.numeric(anc_res))
+
+df_for_fruit_ring <- df_plot_final %>%
+  filter(label %in% tree_pruned$tip.label) %>%
+  dplyr::select(label, Family) %>%
+  rename(Family_Identity_Ring = Family) %>% 
+  as.data.frame()
+
+df_for_fruit_text <- df_for_fruit_ring %>%
+  group_by(Family_Identity_Ring) %>%
+  summarise(label = label[ceiling(n()/2)], .groups = "drop") %>%
+  rename(Family_Name_Text = Family_Identity_Ring) 
+
+p_iter <- ggtree(tree_pruned, layout = "fan", open.angle = 15, linewidth = 0.5)
+
+p_iter$data <- p_iter$data %>%
+  left_join(df_for_tree_branches, by = "label") %>%
+  left_join(df_for_tree_nodes, by = "node") %>%
+  mutate(Final_Evolutionary_Value = coalesce(Range_Color_Branch, Range_Color_Node))
+# 1. Base Tree (Updated legend title)
+p_iter <- p_iter + 
+  aes(color = Final_Evolutionary_Value) + 
+  geom_tree(linewidth = 0.8) +
+  scale_color_viridis_c(option = "viridis", name = "Range Size")
+
+# 2. The Species Trait Ring (Legend removed)
+p_iter <- p_iter +
+  new_scale_fill() + 
+  geom_fruit(
+    data = df_plot_final,
+    geom = geom_tile,
+    mapping = aes(y = label, fill = Range_Val),
+    width = 10,       
+    offset = 0.05,    
+    linewidth = 0
+  ) +
+  scale_fill_viridis_c(option = "viridis", guide = "none") # Hides the duplicate legend!
+
+# 3. The Family Ring (Unchanged)
+p_iter <- p_iter +
+  new_scale_fill() + 
+  geom_fruit(
+    data = df_for_fruit_ring,
+    geom = geom_tile,
+    mapping = aes(y = label, fill = Family_Identity_Ring),
+    width = 5,        
+    offset = 0.08,    
+    linewidth = 0
+  ) +
+  scale_fill_brewer(palette = "Set3",  guide = "none") 
+
+# 4. The Family Text Labels (Pushed further outward)
+p_iter <- p_iter +
+  geom_fruit(
+    data = df_for_fruit_text,
+    geom = geom_text,
+    mapping = aes(
+      y = label, 
+      label = Family_Name_Text,
+      # Here is the magic math that curves it and keeps it right-side up!
+      angle = ifelse(angle > 180, angle + 90, angle - 90) 
+    ),
+    offset = 0.65,    # You may need to tweak this slightly (e.g., 0.2 or 0.3)
+    size = 4.5,
+    fontface = "bold",
+    hjust = 0.5,      # <-- Changed back to 0.5 so the word is centered over its group
+    check_overlap = TRUE
+  )
+
+# 5. Theme and Titles
+p_iter <- p_iter +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15)
+  ) +
+  labs(title = "Phylogenetic Signal in Butterfly Geographic Range")
+
+print(p_iter)
+
+######## try merge a histogram
+library(patchwork)
+# We add this to your existing p_iter. 
+# Adjust the first number in xlim (e.g., -50) to make the root longer or shorter.
+p_iter <- p_iter + 
+  scale_x_continuous(expand = expansion(mult = c(0.2, 0.1))) + # Adds padding
+  geom_rootedge(rootedge = 75) # Physically draws the root line if your tree object has one
+
+p_hist <- ggplot(df_plot_final, aes(x = Range_Val, fill = ..count..)) +
+  geom_histogram(bins = 30, color = "white", show.legend = FALSE) +
+  scale_fill_viridis_c(option = "plasma") +
+  labs(x = "log(Distribution Range)", y = "Frequency") +
+  theme_minimal(base_size = 10) +
+  theme(
+    # These three lines make the background disappear
+    panel.background = element_blank(), 
+    plot.background = element_blank(),
+    panel.border = element_blank(),
+    
+    # Optional: Keep or remove grid lines depending on how "clean" you want it
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    
+    # Text styling
+    axis.title = element_text(size = 8, face = "bold"),
+    axis.text = element_text(size = 8,face = "bold"),
+  )
+# This "inserts" the histogram into the layout. 
+# The 'inset_element' function places the histogram over the tree plot.
+final_plot <- p_iter + 
+  inset_element(
+    p_hist, 
+    left = 0.32,   
+    bottom = 0.35, 
+    right = 0.54,  
+    top = 0.58,
+    align_to = 'full'
+  )
+
+# Display the result
+print(final_plot)
+
+

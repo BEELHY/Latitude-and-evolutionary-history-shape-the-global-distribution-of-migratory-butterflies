@@ -7,4 +7,3 @@ bio2021_ras <- rast(path)
 bio4_585_2021_ras<-bio2021_ras$bio04
 
 
-
