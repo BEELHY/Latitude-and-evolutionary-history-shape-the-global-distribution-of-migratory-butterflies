@@ -194,7 +194,7 @@ ggplot(coef_df, aes(x = beta, y = term)) +
 
 
 # try to add temperature seasonality data
-path <- "data/climate/wc2.1_10m_bio_4.tif"
+path <- "data/climate/wc2.1_2.5m_bio_4.tif"
 
 bio4_ras <- rast(path)
 

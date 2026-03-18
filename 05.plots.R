@@ -513,7 +513,7 @@ p_iter <- p_iter +
 p_hist <- ggplot(df_plot_final, aes(x = Range_Val, fill = ..count..)) +
   geom_histogram(bins = 30, color = "white", show.legend = FALSE) +
   scale_fill_viridis_c(option = "plasma") +
-  labs(x = "log(Distribution Range)", y = "Frequency") +
+  labs(x = "Distribution Range", y = "Frequency") +
   theme_minimal(base_size = 10) +
   theme(
     # These three lines make the background disappear
