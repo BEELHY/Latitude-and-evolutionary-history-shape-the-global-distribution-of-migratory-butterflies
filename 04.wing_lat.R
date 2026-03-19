@@ -229,3 +229,4 @@ m_efficiency <- lmer(expansion_efficiency ~ abs_lat + prop_within + season + (1 
                      data = final_df_lat)
 
 summary(m_efficiency)
+
