@@ -7,3 +7,5 @@
 *.zip
 output
 data
+worldclim_data
+.DS_Store
