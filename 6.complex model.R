@@ -37,8 +37,33 @@ final_df <- df_wb %>%
             by = c("species", "season"))
 
 
-path <- "data/climate/landuse.tiff"
 
+df_lat_sp <- final_df %>%
+  left_join(df_lat_sp , by = "species")
+
+m_combined_cli<- lmer(log10(range_km2) ~ prop_mean+abs_lat+prop_within+season+mean_bio15+mean_elev+ mean_bio4 + (1 | species), data = final_df_lat)
+summary(m_combined_cli)
+
+final_df_scaled <- final_df_lat
+vars_to_scale <- c("prop_mean", "abs_lat", "prop_within", "mean_bio15", "mean_elev", "mean_bio4")
+
+final_df_scaled[vars_to_scale] <- lapply(final_df_scaled[vars_to_scale], scale)
+
+m_combined_cli_scaled <- lmer(log10(range_km2) ~ prop_mean + abs_lat + prop_within + 
+                                season + mean_bio15 + mean_elev + mean_bio4 + 
+                                (1 | species), 
+                              data = final_df_scaled)
+
+summary(m_combined_cli_scaled)
+
+m_combined_cli_WS_U<- lmer(log10(WS_U) ~ prop_mean+abs_lat+prop_within+season+mean_bio15+mean_elev+ mean_bio4 + (1 | Family), data = final_df_scaled)
+summary(m_combined_cli_WS_U)
+#lmer(log10(WS_U) ~ mean_bio15+mean_elev + (1 | Family), data = final_df_scaled)
+m_combined_cli_WS_L<- lmer(log10(WS_L) ~ prop_mean+abs_lat+prop_within+season+mean_bio15+mean_elev+ mean_bio4 + (1 | Family), data = final_df_scaled)
+summary(m_combined_cli_WS_L)
+#lmer(log10(WS_U) ~ mean_elev + (1 | Family), data = final_df_scaled)
+
+
+path <- "data/climate/landuse.tif"
 landuse_ras <- rast(path)
-
-
+summary(landuse_ras)
