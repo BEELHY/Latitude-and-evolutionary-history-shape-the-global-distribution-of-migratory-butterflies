@@ -143,6 +143,12 @@ labs(
   )
 
 #new plot 2.4
+final_df_lat_clean<-final_df_lat
+final_df_lat_clean$log_WS<-log10(final_df_lat$WS_L)
+final_df_lat_clean$log_range<-log10(final_df_lat$range_km2)
+
+m_clean <- lmer(log_range ~ abs_lat*log_WS + prop_within + season + (1 | species), 
+                     data = final_df_lat_clean)
 predictions_clean <- ggpredict(m_clean, terms = c("log_WS", "abs_lat [0, 18.2, 40, 60]"))
 
 clean_plot <- plot(predictions_clean) +
