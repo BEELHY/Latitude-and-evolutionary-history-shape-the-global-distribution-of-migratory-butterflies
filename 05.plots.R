@@ -379,24 +379,20 @@ p_iter <- p_iter +
   geom_rootedge(rootedge = 75) # Physically draws the root line if your tree object has one
 
 p_hist <- ggplot(df_plot_final, aes(x = Range_Val)) +
-  geom_histogram(aes(fill = ..count..), bins = 30, color = "white", show.legend = FALSE) +
+  geom_histogram(aes(y = after_stat(density), fill = after_stat(density)), 
+                 bins = 30, color = "white", show.legend = FALSE) +
   
-  geom_density(aes(y = ..count..), color = "black", fill = NA, linewidth = 0.8) +
+  geom_density(color = "#008B8B", fill = NA, linewidth = 0.8) +
   
   scale_fill_viridis_c(option = "plasma") +
-  labs(x = "log(Distribution Range)", y = "Frequency") +
+  labs(x = "log(Distribution Range)", y = "Density") + 
+  
   theme_minimal(base_size = 10) +
   theme(
-    # These three lines make the background disappear
     panel.background = element_blank(), 
     plot.background = element_blank(),
-    panel.border = element_blank(),
-    
-    # Optional: Keep or remove grid lines depending on how "clean" you want it
     panel.grid.major = element_blank(),
     panel.grid.minor = element_blank(),
-    
-    # Text styling
     axis.title = element_text(size = 8, face = "bold"),
     axis.text = element_text(size = 8, face = "bold")
   )
