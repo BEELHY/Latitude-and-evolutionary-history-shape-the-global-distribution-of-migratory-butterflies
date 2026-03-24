@@ -378,8 +378,11 @@ p_iter <- p_iter +
   scale_x_continuous(expand = expansion(mult = c(0.2, 0.1))) + # Adds padding
   geom_rootedge(rootedge = 75) # Physically draws the root line if your tree object has one
 
-p_hist <- ggplot(df_plot_final, aes(x = Range_Val, fill = ..count..)) +
-  geom_histogram(bins = 30, color = "white", show.legend = FALSE) +
+p_hist <- ggplot(df_plot_final, aes(x = Range_Val)) +
+  geom_histogram(aes(fill = ..count..), bins = 30, color = "white", show.legend = FALSE) +
+  
+  geom_density(aes(y = ..count..), color = "black", fill = NA, linewidth = 0.8) +
+  
   scale_fill_viridis_c(option = "plasma") +
   labs(x = "log(Distribution Range)", y = "Frequency") +
   theme_minimal(base_size = 10) +
@@ -395,14 +398,14 @@ p_hist <- ggplot(df_plot_final, aes(x = Range_Val, fill = ..count..)) +
     
     # Text styling
     axis.title = element_text(size = 8, face = "bold"),
-    axis.text = element_text(size = 8,face = "bold"),
+    axis.text = element_text(size = 8, face = "bold")
   )
+
 # This "inserts" the histogram into the layout. 
-# The 'inset_element' function places the histogram over the tree plot.
 final_plot <- p_iter + 
   inset_element(
     p_hist, 
-    left = 0.32,   
+    left = 0.32,    
     bottom = 0.35, 
     right = 0.54,  
     top = 0.58,
@@ -411,8 +414,5 @@ final_plot <- p_iter +
 
 # Display the result
 print(final_plot)
-
-
-
 
 
