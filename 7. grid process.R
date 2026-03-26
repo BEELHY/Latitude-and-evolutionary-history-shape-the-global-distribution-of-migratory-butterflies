@@ -1,3 +1,4 @@
+library(ranger)
 path <- "data/climate/landuse.tif"
 landuse_ras <- rast(path)
 summary(landuse_ras)
@@ -99,7 +100,8 @@ pixel_level_df <- pixel_level_df %>%
 
 table(pixel_level_df$landuse)
 
-
+landuse_aligned <- project(landuse_ras, env_cont, method = "near")
+env_stack <- c(env_cont, landuse_aligned)
 
 
 
