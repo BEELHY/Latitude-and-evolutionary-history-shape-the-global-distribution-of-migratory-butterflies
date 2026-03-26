@@ -93,5 +93,14 @@ extract_pixel_data_all <- function(f, sp_name, season_name, env_cont, landuse_ra
 
 pixel_level_env_data <- read_csv("output/pixel_level_env_data.csv")
 
+pixel_level_df <- pixel_level_df %>%
+  filter(!landuse %in% c("No_Data", "Open_Sea")) %>%
+  filter(!is.na(landuse))
+
+table(pixel_level_df$landuse)
+
+
+
+
 
 
