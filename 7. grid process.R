@@ -2,7 +2,7 @@ library(ranger)
 path <- "data/climate/landuse.tif"
 landuse_ras <- rast(path)
 summary(landuse_ras)
-
+#annotation
 lc_mapping <- c(
   "0"   = "No_Data",
   "111" = "Closed_Forest_Evergreen_Needle",
@@ -32,7 +32,7 @@ lc_mapping <- c(
 env_cont <- c(elev_ras, bio15_ras, bio4_ras)
 names(env_cont) <- c("elevation", "bio15", "bio4")
 names(landuse_ras) <- "landuse"
-
+#extract data
 extract_pixel_data_all <- function(f, sp_name, season_name, env_cont, landuse_ras) {
   tryCatch({
     r <- rast(f) 
@@ -93,15 +93,27 @@ extract_pixel_data_all <- function(f, sp_name, season_name, env_cont, landuse_ra
 #write_csv(pixel_level_df, "output/pixel_level_env_data.csv")
 
 pixel_level_env_data <- read_csv("output/pixel_level_env_data.csv")
+#land use category
+pixel_level_env_data_clean <- pixel_level_env_data %>%
+  filter(!landuse %in% c("No_Data", "Open_Sea", "Permanent_Water")) %>%
+  mutate(landuse_grouped = case_when(
+    grepl("Closed_Forest", landuse) ~ "Closed_Forest",
+    grepl("Open_Forest", landuse)  ~ "Open_Forest",
+    landuse %in% c("Shrubs", "Herbaceous_Vegetation") ~ "Shrub_Grass",
+    landuse == "Cultivated_Agriculture" ~ "Agriculture",
+    landuse == "Urban_Built_up" ~ "Urban",
+    TRUE ~ "Other_Natural" 
+  )) %>%
+  mutate(landuse_grouped = as.factor(landuse_grouped))
 
-pixel_level_df <- pixel_level_df %>%
-  filter(!landuse %in% c("No_Data", "Open_Sea")) %>%
-  filter(!is.na(landuse))
+table(pixel_level_env_data_clean$landuse_grouped)
 
-table(pixel_level_df$landuse)
+present_data <- pixel_level_env_data_clean %>% mutate(occ = 1)
 
-landuse_aligned <- project(landuse_ras, env_cont, method = "near")
-env_stack <- c(env_cont, landuse_aligned)
+
+
+
+
 
 
 
