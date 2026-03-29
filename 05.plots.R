@@ -379,12 +379,12 @@ p_iter <- p_iter +
   geom_rootedge(rootedge = 75) # Physically draws the root line if your tree object has one
 
 p_hist <- ggplot(df_plot_final, aes(x = Range_Val)) +
-  geom_histogram(aes(y = after_stat(density), fill = after_stat(density)), 
-                 bins = 30, color = "white", show.legend = FALSE) +
+  geom_histogram(aes(fill = after_stat(x)), 
+                 bins = 30, 
+                 color = "white", 
+                 show.legend = FALSE) +
+  scale_fill_viridis_c(option = "plasma") + 
   
-  geom_density(color = "#008B8B", fill = NA, linewidth = 0.8) +
-  
-  scale_fill_viridis_c(option = "plasma") +
   labs(x = "log(Distribution Range)", y = "Density") + 
   
   theme_minimal(base_size = 10) +
