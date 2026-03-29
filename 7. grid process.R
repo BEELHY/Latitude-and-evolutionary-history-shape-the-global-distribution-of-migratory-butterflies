@@ -1,4 +1,6 @@
 library(ranger)
+#（HPC needed）
+
 path <- "data/climate/landuse.tif"
 landuse_ras <- rast(path)
 summary(landuse_ras)
