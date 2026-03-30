@@ -48,7 +48,9 @@ summary(m_combined_cli)
 final_df_scaled <- df_lat_sp_env
 vars_to_scale <- c("prop_mean", "abs_lat", "prop_within", "mean_bio15", "mean_elev", "mean_bio4")
 
-final_df_scaled[vars_to_scale] <- lapply(final_df_scaled[vars_to_scale], scale)
+final_df_scaled[vars_to_scale] <- lapply(final_df_scaled[vars_to_scale], function(x) {
+  as.numeric(datawizard::standardize(x))
+})
 
 m_combined_cli_scaled <- lmer(log10(range_km2) ~ prop_mean + abs_lat + prop_within + 
                                 season + mean_bio15 + mean_elev + mean_bio4 + 
@@ -56,6 +58,7 @@ m_combined_cli_scaled <- lmer(log10(range_km2) ~ prop_mean + abs_lat + prop_with
                               data = final_df_scaled)
 
 summary(m_combined_cli_scaled)
+performance::check_model(m_combined_cli_scaled)
 
 m_combined_cli_WS_U<- lmer(log10(WS_U) ~ prop_mean+abs_lat+prop_within+season+mean_bio15+mean_elev+ mean_bio4 + (1 | Family), data = final_df_scaled)
 summary(m_combined_cli_WS_U)
