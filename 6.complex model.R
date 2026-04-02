@@ -65,6 +65,8 @@ summary(m_combined_cli_WS_U)
 #lmer(log10(WS_U) ~ mean_bio15+mean_elev + (1 | Family), data = final_df_scaled)
 m_combined_cli_WS_L<- lmer(log10(WS_L) ~ prop_mean+abs_lat+prop_within+season+mean_bio15+mean_elev+ mean_bio4 + (1 | Family), data = final_df_scaled)
 summary(m_combined_cli_WS_L)
+
+
 #lmer(log10(WS_L) ~ mean_elev + (1 | Family), data = final_df_scaled)
 
 df_combined<- df_combined %>%
