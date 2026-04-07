@@ -5,6 +5,7 @@
 *.csv
 *.tif
 *.zip
+*.png
 output
 data
 worldclim_data
