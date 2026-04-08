@@ -1,5 +1,8 @@
 #use elevation and precipitation to see new model
 library(tidybayes)
+library(bayesplot)
+library(broom.mixed)
+library(GGally)
 
 path <- "data/climate/wc2.1_2.5m_bio_15.tif"
 
@@ -36,8 +39,6 @@ final_df <- df_wb %>%
   left_join(mechanism_df %>% 
               dplyr::select(species, season, mean_bio4, mean_bio15, mean_elev), 
             by = c("species", "season"))
-
-
 
 df_lat_sp_env <- final_df %>%
   left_join(df_lat_sp , by = "species")
@@ -140,61 +141,125 @@ summary(m_combined_phylo_L)
 summary(m_combined_phylo_U)
 summary(m_combined_phylo)
 
-# 1. Extract posterior draws and identify significance
-posterior_summary <- m_combined_phylo %>%
-  gather_draws(`b_.*`, regex = TRUE) %>%
-  # Remove Intercept as requested
-  filter(.variable != "b_Intercept") %>%
-  mutate(
-    # Clean variable names
-    variable = stringr::str_remove(.variable, "b_"),
-    variable = case_when(
-      variable == "mean_bio4_z" ~ "Temp. Seasonality (Bio4)",
-      variable == "mean_bio15_z" ~ "Precip. Seasonality (Bio15)",
-      variable == "mean_elev_z" ~ "Mean Elevation",
-      variable == "prop_within_z" ~ "Range Proportion",
-      variable == "seasonS2" ~ "Season S2",
-      variable == "seasonS3" ~ "Season S3",
-      variable == "seasonS4" ~ "Season S4",
-      TRUE ~ variable
-    )
-  ) %>%
-  group_by(variable) %>%
-  mutate(
-    # Check if 95% Credible Interval crosses zero
-    # Lower 2.5% and Upper 97.5%
-    is_significant = ifelse(quantile(.value, 0.025) > 0 | quantile(.value, 0.975) < 0, 
-                            "Significant", "Non-significant")
-  )
+posterior <- as.array(m_combined_phylo)
+mcmc_pairs(posterior, pars = c("b_Intercept", "b_mean_bio4_z", "b_mean_bio15_z", "sigma"))
 
-# 2. Plotting
-ggplot(posterior_summary, aes(y = reorder(variable, .value), x = .value, color = is_significant)) +
-  # Reference line at zero
+
+
+
+
+#################### sensitive test #############################
+m_subset_glmm <- brm(
+  log10(range_km2) ~ mean_bio4_z + mean_bio15_z + mean_elev_z + 
+    prop_within_z + season + 
+    (1 | species_phylo), 
+  data = df_model_WS_L,
+  family = gaussian(),
+  prior = c(
+    prior(normal(0, 1), class = "b"),        
+    prior(exponential(1), class = "sd"),     
+    prior(exponential(1), class = "sigma")   
+  ),
+  chains = 4, iter = 6000, warmup = 2000, cores = 4,
+  control = list(adapt_delta = 0.99)
+)
+
+summary(m_subset_glmm)
+
+m_full_glmm <- lmer(log10(range_km2) ~ prop_within + 
+                                season + mean_bio15 + mean_elev + mean_bio4 + 
+                                (1 | species), 
+                              data = final_df_scaled)
+#plot
+d1 <- tidy(m_full_glmm, conf.int = TRUE) %>% mutate(model = "Full GLMM (N=1377)")
+d2 <- tidy(m_subset_glmm, conf.int = TRUE) %>% mutate(model = "Subset GLMM (N=783)")
+d3 <- tidy(m_combined_phylo, conf.int = TRUE) %>% mutate(model = "Subset PGLMM (N=783)")
+
+# annotation
+process_model_data <- function(df) {
+  df %>%
+    mutate(term = str_remove(term, "^b_")) %>%
+    mutate(term = str_remove(term, "_z$")) %>%
+    filter(!term %in% c("(Intercept)", "Intercept")) %>%
+    mutate(
+      clean_term = case_when(
+        term == "mean_bio4"   ~ "Temp. Seasonality (Bio4)",
+        term == "mean_bio15"  ~ "Precip. Seasonality (Bio15)",
+        term == "mean_elev"   ~ "Mean Elevation",
+        term == "prop_within" ~ "Tropical Proportion",
+        term == "prop_mean"   ~ "Mean Habitat Prop.",
+        term == "seasonS2"    ~ "Season S2",
+        term == "seasonS3"    ~ "Season S3",
+        term == "seasonS4"    ~ "Season S4",
+        TRUE ~ term
+      ),
+      is_significant = ifelse(conf.low > 0 | conf.high < 0, "Significant", "Non-significant")
+    )
+}
+
+plot_df <- bind_rows(d1, d2, d3) %>% process_model_data()
+
+# ggplot
+ggplot(plot_df, aes(y = reorder(clean_term, estimate), x = estimate, 
+                    color = model, group = model)) + 
   geom_vline(xintercept = 0, color = "gray50", linetype = "dashed", size = 0.6) +
   
-  # Professional point and interval (95% CI)
-  stat_pointinterval(.width = c(.95), point_size = 4, interval_size = 1) +
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), 
+                 position = position_dodge(width = 0.7), 
+                 height = 0.25, size = 0.8) +
   
-  # Assign colors: Orange for Significant, Blue for Non-significant
-  scale_color_manual(values = c("Significant" = "#E67E22", "Non-significant" = "#3498DB")) +
+  geom_point(aes(shape = is_significant), 
+             position = position_dodge(width = 0.7), 
+             size = 3.5) +
   
-  # Professional English Annotations
+  scale_color_manual(values = c(
+    "Full GLMM (N=1377)" = "#16A085",   
+    "Subset GLMM (N=783)" = "#2E86C1", 
+    "Subset PGLMM (N=783)" = "#E67E22"
+  )) +
+  scale_shape_manual(values = c("Significant" = 16, "Non-significant" = 1)) +
+  
   labs(
-    title = "Standardized Effects on Butterfly Range Size",
-    subtitle = "Posterior Estimates from Bayesian Phylogenetic Model",
-    x = "Standardized Coefficient (Post-Warmup Draws)",
+    title = "Sensitivity Analysis: Environmental Drivers of Range Size",
+    subtitle = "Comparing Full Data vs. Phylogenetic Subset Models",
+    x = "Standardized Coefficient Estimate (95% CI/CrI)",
     y = NULL,
-    color = "Statistical Significance (95% CI)"
+    color = "Model Version",
+    shape = "Significance"
   ) +
   
   theme_minimal(base_size = 12) +
   theme(
     legend.position = "bottom",
-    panel.grid.minor = element_blank(),
-    panel.grid.major.y = element_line(color = "gray90"),
+    legend.box = "vertical",
     axis.text.y = element_text(face = "bold", color = "black"),
-    plot.title = element_text(face = "bold", size = 14, margin = margin(b = 10)),
-    axis.title.x = element_text(margin = margin(t = 10))
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", size = 14)
   )
+
+
+#correlate
+df_full_corr <- final_df_scaled %>%
+  dplyr::select(mean_bio4, mean_bio15, mean_elev, prop_within)
+
+df_subset_corr <- df_model_WS_L %>%
+  dplyr::select(mean_bio4_z, mean_bio15_z, mean_elev_z, prop_within_z) %>%
+  rename_with(~stringr::str_remove(., "_z$"))
+
+ggpairs(df_full_corr, 
+        title = "Correlation Matrix: Full Dataset (N=1377)",
+        upper = list(continuous = wrap("cor", size = 4, color = "black")),
+        diag = list(continuous = wrap("densityDiag", fill = "#16A085", alpha = 0.5)),
+        lower = list(continuous = wrap("smooth", alpha = 0.1, size = 0.1, color = "#16A085"))) +
+  theme_bw()
+
+ggpairs(df_subset_corr, 
+        title = "Correlation Matrix: Subset (N=783)",
+        upper = list(continuous = wrap("cor", size = 4, color = "black")),
+        diag = list(continuous = wrap("densityDiag", fill = "#E67E22", alpha = 0.5)),
+        lower = list(continuous = wrap("smooth", alpha = 0.1, size = 0.1, color = "#E67E22"))) +
+  theme_bw()
+
+
 
 
