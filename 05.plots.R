@@ -45,8 +45,8 @@ ggplot() +
            ) +
   geom_line(data = df_preds2_1, aes(x = abs_lat, y = log10_WS, color = WS_type), 
             size = 1.2) +
-  scale_color_manual(values = c("Lower (WS_L)" = "#377eb8", "Upper (WS_U)" = "#e41a1c")) +
-  scale_fill_manual(values = c("Lower (WS_L)" = "#377eb8", "Upper (WS_U)" = "#e41a1c")) +
+  scale_color_manual(values = c("Lower (WS_L)" = "#56B4E9", "Upper (WS_U)" = "#D55E00")) +
+  scale_fill_manual(values = c("Lower (WS_L)" = "#56B4E9", "Upper (WS_U)" = "#D55E00")) +
   scale_shape_manual(values = c(16, 17, 15, 18, 25)) + 
   labs(
     title = "Bergmann's Rule in migratry Butterflies",
@@ -94,12 +94,12 @@ ggplot() +
 
 ggplot() +
   geom_ribbon(data = pred_mechanism, aes(x = mean_bio4, ymin = conf.low, ymax = conf.high), 
-              fill = "#e41a1c", alpha = 0.2) +
+              fill = "#D55E00", alpha = 0.2) +
   geom_point(data = final_df, aes(x = mean_bio4, y = log10(range_km2), color = prop_mean), 
              alpha = 0.3, size = 1) +
-  scale_color_viridis_c(option = "plasma")+
+  scale_color_viridis_c(option = "viridis")+
   geom_line(data = pred_mechanism, aes(x = mean_bio4, y = log10_range), 
-            color = "#e41a1c", size = 1.2) +
+            color = "#D55E00", size = 1.2) +
   labs(
     title = "Figure 2.3: Rapoport Mechanism",
     subtitle = "Climatic variability (Bio4) driving range expansion",
@@ -166,7 +166,24 @@ clean_plot <- plot(predictions_clean) +
 
 print(clean_plot)
 
+clean_plot <- plot(predictions_clean) +
+  labs(
+    title = "Effect of Wing Size on Range Size Across Latitudes",
+    x = "Wing Size (log10)", 
+    y = "Predicted Range Size (log10 km²)",
+    color = "Absolute Latitude",
+    fill = "Absolute Latitude"
+  ) +
+  # 添加 viridis 配色方案
+  scale_color_viridis_d(option = "viridis") + 
+  scale_fill_viridis_d(option = "viridis") +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 12),
+    plot.title = element_text(face = "bold", hjust = 0.5)
+  )
 
+print(clean_plot)
 #phylo
 
 family_data <- df_lat_sp %>%
