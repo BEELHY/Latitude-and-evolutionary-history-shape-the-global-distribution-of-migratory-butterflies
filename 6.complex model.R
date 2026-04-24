@@ -43,9 +43,8 @@ final_df <- df_wb %>%
 df_lat_sp_env <- final_df %>%
   left_join(df_lat_sp , by = "species")
 
-m_combined_cli<- lmer(log10(range_km2) ~ prop_mean+abs_lat+prop_within+season+mean_bio15+mean_elev+ mean_bio4 + (1 | species), data = df_lat_sp_env)
+m_combined_cli<- lmer(log10(range_km2) ~ prop_mean+prop_within+season+mean_bio15+mean_elev+ mean_bio4 + (1 | species), data = df_lat_sp_env)
 summary(m_combined_cli)
-
 final_df_scaled <- df_lat_sp_env
 vars_to_scale <- c("prop_mean", "abs_lat", "prop_within", "mean_bio15", "mean_elev", "mean_bio4")
 
@@ -62,11 +61,14 @@ summary(m_combined_cli_scaled)
 performance::check_model(m_combined_cli_scaled)
 
 m_combined_cli_WS_U<- lmer(log10(WS_U) ~ abs_lat+mean_bio15+mean_elev+ (1 | Family), data = final_df_scaled)
+m_combined_cli_WS_U1<- lmer(log10(WS_U) ~ mean_bio4+mean_bio15+mean_elev+ (1 | Family), data = final_df_scaled)
+summary(m_combined_cli_WS_U1)
 summary(m_combined_cli_WS_U)
 #lmer(log10(WS_U) ~ mean_bio15+mean_elev + (1 | Family), data = final_df_scaled)
 m_combined_cli_WS_L<- lmer(log10(WS_L) ~ abs_lat+mean_bio15+mean_elev+ (1 | Family), data = final_df_scaled)
 summary(m_combined_cli_WS_L)
-
+m_combined_cli_WS_L1<- lmer(log10(WS_L) ~ mean_bio4+mean_bio15+mean_elev+ (1 | Family), data = final_df_scaled)
+summary(m_combined_cli_WS_L1)
 
 #lmer(log10(WS_L) ~ mean_elev + (1 | Family), data = final_df_scaled)
 
@@ -261,5 +263,49 @@ ggpairs(df_subset_corr,
   theme_bw()
 
 
+#2.4
+df <- data.frame(
+  Variable = factor(c('Grassland', 'Shrubs', 'Trees/Forest', 'Cropland', 'Bio_4', 'Bio_15', 'Elevation', 'HII'),
+                    levels = rev(c('Grassland', 'Shrubs', 'Trees/Forest', 'Cropland', 'Bio_4', 'Bio_15', 'Elevation', 'HII'))),
+  Model = rep(c("OLS", "GLM"), each = 8),
+  Estimate = c(-3.311, -3.117, -2.408, -1.753, -0.689, -0.310, 0.036, 0.136, 
+               -1.786, -1.188, -0.892, -0.396, -0.648, -0.454, 0.053, 0.137),
+  Lower = c(-3.463, -3.272, -2.567, -1.909, -0.696, -0.321, 0.026, 0.130,
+            -1.895, -1.317, -1.000, -0.525, -0.655, -0.466, 0.039, 0.129),
+  Upper = c(-3.111, -2.925, -2.201, -1.561, -0.682, -0.299, 0.045, 0.141,
+            -1.668, -1.035, -0.766, -0.259, -0.641, -0.442, 0.066, 0.146)
+)
 
+df <- data.frame(
+  Variable = factor(c('Grassland', 'Shrubs', 'Trees/Forest', 'Cropland', 'Bio_4', 'Bio_15', 'Elevation', 'HII'),
+                    levels = rev(c('Grassland', 'Shrubs', 'Trees/Forest', 'Cropland', 'Bio_4', 'Bio_15', 'Elevation', 'HII'))),
+  Model = rep(c("OLS", "GLM"), each = 8),
+  Estimate = c(-3.311, -3.117, -2.408, -1.753, -0.689, -0.310, 0.036, 0.136, 
+               -1.786, -1.188, -0.892, -0.396, -0.648, -0.454, 0.053, 0.137),
+  Lower = c(-3.463, -3.272, -2.567, -1.909, -0.696, -0.321, 0.026, 0.130,
+            -1.895, -1.317, -1.000, -0.525, -0.655, -0.466, 0.039, 0.129),
+  Upper = c(-3.111, -2.925, -2.201, -1.561, -0.682, -0.299, 0.045, 0.141,
+            -1.668, -1.035, -0.766, -0.259, -0.641, -0.442, 0.066, 0.146)
+)
+
+pd <- position_dodge(width = 0.6)
+
+ggplot(df, aes(x = Estimate, y = Variable, color = Model, fill = Model)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+  
+  geom_point(aes(shape = Model), 
+             size = 2.5, 
+             position = pd, 
+             alpha = 0.7) + 
+  geom_errorbarh(aes(xmin = Lower, xmax = Upper), 
+                 height = 0.4, 
+                 linewidth = 0.8, 
+                 position = pd) +
+  
+  scale_color_manual(values = c("OLS" = "#56B4E9", "GLM" = "#D55E00")) +
+  theme_bw() +
+  theme(legend.position = "top",
+        panel.grid.minor = element_blank()) +
+  labs(title = "Model Comparison with Visible Error Bars",
+       x = "Estimate (95% CI)")
 
