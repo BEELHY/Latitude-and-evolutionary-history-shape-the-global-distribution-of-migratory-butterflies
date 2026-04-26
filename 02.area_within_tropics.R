@@ -340,7 +340,7 @@ A <- vcv.phylo(tree_final)
 
 # model with phylogeny
 m_rapoport_optimized <- brm(
-  log10(range_km2) ~ mean_bio4_z  + prop_within_z + season + 
+  log10(range_km2) ~ prop_mean+prop_within_z + season + 
     (1 | gr(species_phylo, dist = "gaussian")),
   data = df_phylo_scaled,
   data2 = list(species_phylo = A),
@@ -363,3 +363,31 @@ m_rapoport_optimized <- brm(
 summary(m_rapoport_optimized)
 plot(m_rapoport_optimized)
 bayes_R2(m_rapoport_optimized)
+
+draws <- as.data.frame(m_rapoport_optimized)
+draws <- draws %>%
+  mutate(
+    var_phylo = sd_species_phylo__Intercept^2,
+    var_res = sigma^2,
+    lambda = var_phylo / (var_phylo + var_res)
+  )
+lambda_summary <- draws %>%
+  summarise(
+    mean = mean(lambda),
+    median = median(lambda),
+    lower_95 = quantile(lambda, 0.025),
+    upper_95 = quantile(lambda, 0.975)
+  )
+
+print("系统发育信号 (Lambda/H2) 计算结果：")
+print(lambda_summary)
+
+ggplot(draws, aes(x = lambda)) +
+  geom_density(fill = "skyblue", alpha = 0.5) +
+  geom_vline(xintercept = lambda_summary$mean, linetype = "dashed", color = "red") +
+  labs(
+    title = "Posterior Distribution of Phylogenetic Signal (Lambda)",
+    x = "Lambda (H2)",
+    y = "Density"
+  ) +
+  theme_minimal()
