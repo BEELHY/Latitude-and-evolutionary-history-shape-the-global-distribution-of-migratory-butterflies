@@ -77,17 +77,20 @@ pred_mechanism <- predict_response(m_mechanism, terms = "mean_bio4", back_transf
 
 ggplot() +
   geom_ribbon(data = pred_pattern, aes(x = prop_mean, ymin = conf.low, ymax = conf.high), 
-              fill = "#377eb8", alpha = 0.2) +
-  geom_point(data = final_df, aes(x = prop_mean, y = log10(range_km2)), 
-             color = "grey30", alpha = 0.2, size = 1) +
+              fill = "#D55E00", alpha = 0.2) +
+  geom_point(data = final_df, aes(x = prop_mean, y = log10(range_km2), color = mean_bio4), 
+             alpha = 0.3, size = 1) +
+  scale_color_viridis_c(option = "viridis") +
   
   geom_line(data = pred_pattern, aes(x = prop_mean, y = log10_range), 
-            color = "#377eb8", size = 1.2) +
+            color = "#D55E00", size = 1.2) +
+  
   labs(
     title = "Figure 2.2: Rapoport Pattern",
     subtitle = "Relationship between range size and tropical occupancy",
     x = "Proportion of range within tropics",
-    y = expression(log[10] * " Range Size (" * km^2 * ")")
+    y = expression(log[10] * " Range Size (" * km^2 * ")"),
+    color = "Temp Seasonality\n(Bio4)" # 给新加的颜色图例加个好看的标题
   ) +
   theme_classic()
 

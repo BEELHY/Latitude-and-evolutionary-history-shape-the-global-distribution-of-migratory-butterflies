@@ -1,0 +1,846 @@
+---
+title: "script R"
+output: html_document
+date: "2026-04-26"
+---
+```{r}
+#1. file remane
+
+library(dplyr)
+library(stringr)
+library(purrr)
+library(tibble)
+
+# Lookup table
+tax_map <- tribble(
+  ~species_prev, ~species_up,
+  "Allancastria_cerisyi",      "Zerynthia_cerisyi",
+  "Appias_drusilla",           "Glutophrissa_drusilla",
+  "Colias_sareptensis",        "Colias_alfacariensis",
+  "Eurema_lisa",               "Pyrisitia_lisa",
+  "Eurema_nicippe",            "Abaeis_nicippe",
+  "Euthalia_nais",             "Symphaedra_nais",
+  "Junonia_lavinia",           "Junonia_genoveva",
+  "Libytheana_carinenta",      "Prolibythea_carinenta",
+  "Papilio_anchisiades",       "Heraclides_anchisiades",
+  "Papilio_cresphontes",       "Heraclides_cresphontes",
+  "Papilio_menatius",          "Pterourus_menatius",
+  "Papilio_paeon",             "Heraclides_paeon",
+  "Papilio_thoas",             "Heraclides_thoas",
+  "Papilio_torquatus",         "Heraclides_torquatus",
+  "Papilio_troilus",           "Pterourus_troilus",
+  "Plebejus_acmon",            "Icaricia_acmon",
+  "Polyommatus_semiargus",     "Cyaniris_semiargus",
+  "Protographium_agesilaus",   "Eurytides_agesilaus",
+  "Protographium_philolaus",   "Eurytides_philolaus",
+  "Speyeria_callippe",         "Argynnis_callippe",
+  "Hylephila_phylaeus",        "Hylephila_phyleus"
+)
+
+# List rasters
+dir_in <- "data/SuitabilityMaps_MigratorySpecies"
+files <- list.files(dir_in, pattern = "^Binary_S[1-4]", full.names = TRUE, recursive = TRUE)
+
+# Build a rename plan (supports optional underscore after S1/S2/S3/S4)
+plan <- tibble(path = files,
+               dir  = dirname(path),
+               file = basename(path)) %>%
+  mutate(
+    m = str_match(file, "^Binary_(S[1-4])(_?)([^.]+)(\\.[^.]+)$"),
+    season = m[,2],
+    sep    = m[,3],          # "" or "_", preserved
+    sp_prev = m[,4],
+    ext    = m[,5]
+  ) %>%
+  dplyr::select(-m) %>%
+  left_join(tax_map, by = c("sp_prev" = "species_prev")) %>%
+  mutate(
+    new_file = if_else(!is.na(species_up),
+                       paste0("Binary_", season, sep, species_up, ext),
+                       file),
+    new_path = file.path(dir, new_file)
+  )
+
+# Inspect what will change
+to_change <- plan %>% filter(file != new_file)
+to_change %>%  dplyr::select(file, new_file)
+
+# Safety check: avoid collisions (two old files -> same new name)
+stopifnot(!any(duplicated(to_change$new_path)))
+
+# Rename files
+ok <- file.rename(from = to_change$path, to = to_change$new_path)
+if (!all(ok)) warning("Some files could not be renamed. Check permissions / existing filenames.")
+
+```
+
+```{r}
+#2 range size
+
+# Load libraries
+library(terra)
+library(dplyr)
+library(stringr)
+library(tidyverse)
+library(ggplot2)
+library(lme4)
+library(lmerTest)
+library(MuMIn) 
+library(dismo)
+library(geodata)
+library(raster)
+library(ape)
+library(brms)
+
+
+# Path
+path <- "data/SuitabilityMaps_MigratorySpecies"
+
+# List all files
+files <- list.files(path,
+                    pattern = "^Binary_S[1-4].*",
+                    full.names = TRUE,
+                    recursive = TRUE)
+
+# Parse season & species
+meta <- tibble(file = files) %>%
+  mutate(stem = tools::file_path_sans_ext(basename(file))) %>%
+  mutate(
+    season  = str_match(stem, "^Binary_(S[1-4])")[,2],
+    species = str_match(stem, "^Binary_(S[1-4])(.*)$")[,3]
+  ) %>%
+  dplyr::select(file, species, season)
+
+tropic_lat <- 23.4366
+
+calc_metrics <- function(f) {
+  r <- rast(f)
+  
+  # ensure lon/lat so latitude is meaningful
+  if (!is.lonlat(r)) {
+    r <- project(r, "EPSG:4326", method = "near")  # keeps 0/1
+  }
+  
+  occ  <- (r == 1)
+  lat  <- init(r, "y")
+  trop <- (lat >= -tropic_lat) & (lat <= tropic_lat)
+  
+  a <- cellSize(r, unit = "km")  # per-cell area in km^2
+  
+  # total range size (km^2)
+  range_km2 <- global(mask(a, occ, maskvalues = 0), "sum", na.rm = TRUE)[1,1]
+  
+  # tropical part (km^2)
+  trop_km2  <- global(mask(a, occ & trop, maskvalues = 0), "sum", na.rm = TRUE)[1,1]
+  
+  prop_tropics <- if (is.na(range_km2) || range_km2 == 0) NA_real_ else trop_km2 / range_km2
+  
+  tibble(prop_tropics = prop_tropics,
+         range_km2     = range_km2)
+}
+
+out <- meta %>%
+  rowwise() %>%
+  mutate(tmp = list(calc_metrics(file))) %>%
+  tidyr::unnest(tmp) %>%
+  ungroup() %>%
+  dplyr::select(species, season, prop_tropics, range_km2) %>%
+  arrange(species, season)
+
+# Export output
+write_csv(out, "output/range_tropics.csv")
+
+# Import data
+out <- read_csv("output/range_tropics.csv")
+
+# Plot
+ggplot(out, aes(range_km2, prop_tropics)) +
+  geom_point() +
+  theme_bw() +
+  geom_smooth(method = "lm")
+
+# Linear model
+# Considering seasonal distribution
+# Within and between species
+df_ss <- out %>% 
+  filter(is.finite(prop_tropics), is.finite(range_km2), range_km2 > 0) %>% 
+  mutate(season = factor(season))
+
+df_wb <- df_ss %>%
+  group_by(species) %>%
+  mutate(
+    prop_mean   = mean(prop_tropics, na.rm = TRUE),      # between-species tropicality
+    prop_within = prop_tropics - prop_mean              # within-species seasonal deviation
+  ) %>%
+  ungroup()
+
+m_wb <- lmer(log10(range_km2) ~ prop_mean + prop_within + season + (1 | species),
+             data = df_wb)
+
+summary(m_wb)
+
+m_wb_p <- lmer(log10(range_km2) ~ prop_mean + prop_within + season + (1 | species),
+               data = df_wb)
+summary(m_wb_p)
+
+# Effect size
+# 95% CI
+b  <- fixef(m_wb_p)["prop_mean"]
+se <- summary(m_wb_p)$coefficients["prop_mean","Std. Error"]
+
+# 95% Wald CI for beta
+b_ci <- b + c(-1, 1) * 1.96 * se
+
+delta <- 0.1
+
+mult_ci <- 10^(b_ci * delta)
+pct_ci  <- (1 - mult_ci) * 100
+
+mult_ci
+pct_ci
+
+# Plot
+# One point per species (between-species pattern)
+df_between <- df_wb %>%
+  group_by(species) %>%
+  summarise(
+    prop_mean = first(prop_mean),
+    range_km2 = mean(range_km2, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  filter(is.finite(prop_mean), is.finite(range_km2), range_km2 > 0) %>%
+  mutate(log10_range = log10(range_km2))
+
+# Prediction line + 95% CI from the mixed model (fixed effects only)
+b <- fixef(m_wb_p)
+V <- vcov(m_wb_p)
+
+grid <- data.frame(
+  prop_mean   = seq(0, 1, length.out = 200),
+  prop_within = 0,
+  season      = factor("S1", levels = levels(df_wb$season))  # reference season for display
+)
+
+X <- model.matrix(~ prop_mean + prop_within + season, grid)
+grid$fit <- as.numeric(X %*% b)
+grid$se  <- sqrt(diag(X %*% V %*% t(X)))
+grid$lwr <- grid$fit - 1.96 * grid$se
+grid$upr <- grid$fit + 1.96 * grid$se
+
+# Plot
+ggplot(df_between, aes(x = prop_mean, y = log10_range)) +
+  geom_point(alpha = 0.4, size = 1.6) +
+  geom_ribbon(
+    data = grid,
+    aes(x = prop_mean, ymin = lwr, ymax = upr),
+    inherit.aes = FALSE,
+    alpha = 0.2
+  ) +
+  geom_line(
+    data = grid,
+    aes(x = prop_mean, y = fit),
+    inherit.aes = FALSE,
+    linewidth = 1
+  ) +
+  theme_classic() +
+  labs(
+    x = "Mean proportion of range in the tropics (|lat| ≤ 23.4366°)",
+    y = expression(log[10]*"(range size, km"^2*")")
+  )
+
+######################################
+# Coefficient plot
+# extract betas + Wald CIs
+terms <- c("prop_mean", "prop_within")
+se_fix <- sqrt(diag(vcov(m_wb_p)))[terms]
+beta   <- fixef(m_wb_p)[terms]
+
+coef_df <- data.frame(
+  term = c("Between-species tropicality (prop_mean)",
+           "Within-species seasonal deviation (prop_within)"),
+  beta = as.numeric(beta),
+  lwr  = as.numeric(beta - 1.96 * se_fix),
+  upr  = as.numeric(beta + 1.96 * se_fix)
+)
+
+ggplot(coef_df, aes(x = beta, y = term)) +
+  geom_vline(xintercept = 0, linetype = 2) +
+  geom_errorbarh(aes(xmin = lwr, xmax = upr), height = 0.2) +
+  geom_point(size = 2) +
+  theme_classic() +
+  labs(x = "Effect on log10(range_km2)", y = NULL)
+
+
+
+# try to add temperature seasonality data
+path <- "data/climate/wc2.1_2.5m_bio_4.tif"
+
+bio4_ras <- rast(path)
+
+#get data+calculate mean
+extract_mechanism_metrics <- function(f, bio_layer) {
+  r <- rast(f)
+  if (!is.lonlat(r)) r <- project(r, "EPSG:4326", method = "near")
+  
+  bio_layer <- resample(bio_layer, r, method="bilinear") 
+  
+  occ <- (r == 1)
+  if (global(occ, "sum", na.rm = TRUE)[1, 1] == 0) return(NA_real_)
+  
+  occ_bio <- mask(bio_layer, r, maskvalues = 0)
+  
+  mean_bio4 <- global(occ_bio, "mean", na.rm = TRUE)[1, 1]
+  return(mean_bio4)
+}
+
+# calculation
+mechanism_df <- ras_meta %>%
+  mutate(mean_bio4 = map_dbl(file, ~extract_mechanism_metrics(.x, bio4_ras)))
+
+#rbind
+final_df <- df_wb %>%
+  left_join(mechanism_df %>% dplyr::select(species, season, mean_bio4), 
+            by = c("species", "season"))
+#pattern model
+m_pattern<- lmer(log10(range_km2) ~ prop_mean+prop_within + season + (1 | species), data = final_df)
+
+# meca model
+m_mechanism <- lmer(log10(range_km2) ~ mean_bio4 +prop_within+ season + (1 | species), data = final_df)
+
+# both model
+m_combined <- lmer(log10(range_km2) ~ prop_mean+prop_within+season+ mean_bio4 + (1 | species), data = final_df)
+
+summary(m_pattern)
+summary(m_combined)
+anova(m_pattern, m_mechanism)
+
+
+########################if 1 season has dominated effect?
+m_pattern_season<- lmer(log10(range_km2) ~ (prop_within +prop_mean)*season + (1 | species), data = final_df)
+summary(m_pattern_season)
+
+#season?
+m_mechanism_season<- lmer(log10(range_km2) ~ (mean_bio4 +prop_within)* season + (1 | species), data = final_df)
+summary(m_mechanism_season)
+# no seasonal interaction
+
+
+#############################upadte version try to add Phylogenetic Signal
+path <- "data/phylogenic/ntDegen359_fossils_smith_brown_strategyA.tre"
+
+tree <- read.nexus(path)
+tip_mapping <- tibble(original_label = tree$tip.label) %>%
+  mutate(
+    extracted_name = str_extract(original_label, "[A-Z][a-z]+_[a-z]+(?=(_|$))")
+  )
+
+#manege tree+match species
+final_df_genus <- final_df %>%
+  mutate(genus = str_extract(species, "^[A-Z][a-z]+"))
+
+tip_mapping_genus <- tip_mapping %>%
+  mutate(genus = str_extract(extracted_name, "^[A-Z][a-z]+")) %>%
+  filter(!is.na(genus)) 
+
+exact_matches <- final_df_genus %>%
+  distinct(species, genus) %>%
+  inner_join(tip_mapping_genus, by = c("species" = "extracted_name", "genus" = "genus")) %>%
+  mutate(match_type = "exact")
+
+print(paste("exact_matches:", nrow(exact_matches)))
+#151
+
+#add genus proxy use species in same genus as proxy
+unmatched_species <- final_df_genus %>%
+  distinct(species, genus) %>%
+  filter(!species %in% exact_matches$species)
+
+used_exact_tips <- exact_matches$original_label
+
+available_tips_for_proxy <- tip_mapping_genus %>%
+  filter(!original_label %in% used_exact_tips)
+
+
+unmatched_species_indexed <- unmatched_species %>%
+  group_by(genus) %>%
+  mutate(spec_rank = row_number()) %>%
+  ungroup()
+
+available_tips_indexed <- available_tips_for_proxy %>%
+  group_by(genus) %>%
+  mutate(tip_rank = row_number()) %>%
+  ungroup()
+
+genus_proxies <- unmatched_species_indexed %>%
+  inner_join(
+    available_tips_indexed %>% dplyr::select(genus, original_label, tip_rank),
+    by = c("genus" = "genus", "spec_rank" = "tip_rank") 
+  ) %>%
+  mutate(match_type = "genus_proxy") %>%
+  dplyr::select(species, original_label, match_type)
+
+print(paste("add species", nrow(genus_proxies)))
+
+all_matches <- bind_rows(
+  exact_matches %>% dplyr::select(species, original_label, match_type),
+  genus_proxies %>% dplyr::select(species, original_label, match_type)
+)
+
+all_matches_unique <- all_matches %>%
+  group_by(original_label) %>%
+  slice(1) %>% 
+  ungroup()
+
+tree_final <- keep.tip(tree, all_matches_unique$original_label)
+
+tree_final$tip.label <- all_matches_unique$species[match(tree_final$tip.label, all_matches_unique$original_label)]
+
+df_phylo <- final_df %>%
+  filter(species %in% tree_final$tip.label)
+df_phylo <-df_phylo %>%
+  filter(species %in% tree_final$tip.label) %>%
+  mutate(species = factor(species))
+df_phylo$species_phylo <- df_phylo$species
+
+df_phylo_scaled <- df_phylo %>%
+  mutate(
+    mean_bio4_z = as.numeric(scale(mean_bio4)),
+    prop_mean_z = as.numeric(scale(prop_mean)),
+    prop_within_z = as.numeric(scale(prop_within))
+  )
+
+print(paste("final species", length(unique(df_phylo$species))))
+
+#247
+
+#turn to matrix
+if(!is.ultrametric(tree_final)) tree_final <- phytools::force.ultrametric(tree_final)
+A <- vcv.phylo(tree_final)
+
+# model with phylogeny
+m_rapoport_optimized <- brm(
+  log10(range_km2) ~ prop_mean+prop_within_z + season + 
+    (1 | gr(species_phylo, dist = "gaussian")),
+  data = df_phylo_scaled,
+  data2 = list(species_phylo = A),
+  family = gaussian(),
+  prior = c(
+    prior(normal(0, 1), class = "b"),         
+    prior(student_t(3, 0, 1), class = "sd"),  
+    prior(student_t(3, 0, 1), class = "sigma") 
+  ),
+  chains = 4, 
+  iter = 6000,     
+  warmup = 2000,   
+  cores = 4,
+  control = list(
+    adapt_delta = 0.99,       
+    max_treedepth = 15        
+  )
+)
+
+summary(m_rapoport_optimized)
+plot(m_rapoport_optimized)
+bayes_R2(m_rapoport_optimized)
+
+draws <- as.data.frame(m_rapoport_optimized)
+draws <- draws %>%
+  mutate(
+    var_phylo = sd_species_phylo__Intercept^2,
+    var_res = sigma^2,
+    lambda = var_phylo / (var_phylo + var_res)
+  )
+lambda_summary <- draws %>%
+  summarise(
+    mean = mean(lambda),
+    median = median(lambda),
+    lower_95 = quantile(lambda, 0.025),
+    upper_95 = quantile(lambda, 0.975)
+  )
+
+print(" (Lambda/H2) ：")
+print(lambda_summary)
+
+ggplot(draws, aes(x = lambda)) +
+  geom_density(fill = "skyblue", alpha = 0.5) +
+  geom_vline(xintercept = lambda_summary$mean, linetype = "dashed", color = "red") +
+  labs(
+    title = "Posterior Distribution of Phylogenetic Signal (Lambda)",
+    x = "Lambda (H2)",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+```
+
+```{r}
+# wingspan
+
+# Load libraries
+library(tidyverse)
+library(dplyr)
+library(stringr)
+library(lme4)
+library(lmerTest)
+library(ggplot2)
+
+# Import data
+migr <- read_csv("output/range_tropics.csv")
+trait <- read_csv("data/harmonized_LepTraits.csv")
+
+# Wrangling species dataframe
+migr_species <- as.data.frame(unique(migr$species))
+colnames(migr_species) <- "Species"
+migr_species <- migr_species %>%
+  mutate(Species = str_replace_all(Species, "_", " "))
+
+# Merging with trait
+migr_trait <- dplyr::left_join(migr_species, trait, by = "Species")
+
+# Calculating mean for NA values
+migr_trait_calc <- migr_trait %>%
+  mutate(
+    WS_L = if_else(
+      is.na(WS_L),
+      {m <- rowMeans(cbind(WS_L_Fem, WS_L_Mal), na.rm = TRUE)
+      ifelse(is.nan(m), NA_real_, m)},
+      WS_L
+    ),
+    WS_U = if_else(
+      is.na(WS_U),
+      {m <- rowMeans(cbind(WS_U_Fem, WS_U_Mal), na.rm = TRUE)
+      ifelse(is.nan(m), NA_real_, m)},
+      WS_U
+    )
+  ) %>% 
+  dplyr::select(ValidBinomial, Family, WS_L, WS_U)
+
+migr_trait_calc <- migr_trait_calc %>%
+  filter(!if_all(everything(), is.na))
+
+# Exporting output
+write_csv(migr_trait_calc, "output/migr_trait.csv")
+
+############################################################
+# Import data
+migr_trait <- read_csv("output/migr_trait.csv")
+range <- read_csv("output/range_tropics.csv")
+
+# Wrangling data
+colnames(migr_trait)[1] <- "species"
+range <- range %>%
+  mutate(species = str_replace_all(species, "_", " "))
+
+# Combining dataframe
+trait_range <- dplyr::left_join(range, migr_trait, by = c("species"))
+trait_range <- unique(trait_range)
+
+# Exporting output
+write_csv(trait_range, "output/trait_range.csv")
+
+# Species-level data
+df_sp_trait <- trait_range %>%
+  group_by(species, Family) %>%
+  summarise(
+    prop_mean = mean(prop_tropics, na.rm = TRUE),
+    range_km2 = mean(range_km2, na.rm = TRUE),  # optional covariate later
+    WS_L = dplyr::first(WS_L[!is.na(WS_L)]),
+    WS_U = dplyr::first(WS_U[!is.na(WS_U)]),
+    .groups = "drop"
+  ) %>%
+  filter(is.finite(prop_mean))
+
+# Model
+df_L <- df_sp_trait %>% filter(is.finite(WS_L), WS_L > 0)
+df_U <- df_sp_trait %>% filter(is.finite(WS_U), WS_U > 0)
+
+m_L <- lmer(log10(WS_L) ~ prop_mean + (1 | Family), data = df_L)
+m_U <- lmer(log10(WS_U) ~ prop_mean + (1 | Family), data = df_U)
+
+summary(m_L)
+summary(m_U)
+
+# Sensitivity
+m_L2 <- lmer(log10(WS_L) ~ prop_mean + log10(range_km2) + (1 | Family),
+             data = df_L %>% filter(is.finite(range_km2), range_km2 > 0))
+m_U2 <- lmer(log10(WS_U) ~ prop_mean + log10(range_km2) + (1 | Family),
+             data = df_U %>% filter(is.finite(range_km2), range_km2 > 0))
+
+summary(m_L2)
+summary(m_U2)
+
+#prop_mean not significante
+
+# Interpretable trend
+effect_per_0.1 <- function(mod, term = "prop_mean", delta = 0.1) {
+  coefs <- summary(mod)$coefficients
+  b  <- coefs[term, "Estimate"]
+  se <- coefs[term, "Std. Error"]
+  
+  b_ci <- b + c(-1, 1) * 1.96 * se
+  
+  mult    <- 10^(b * delta)
+  mult_ci <- 10^(b_ci * delta)
+  
+  pct    <- (mult - 1) * 100
+  pct_ci <- (mult_ci - 1) * 100
+  
+  data.frame(
+    multiplier = mult,
+    pct_change = pct,
+    pct_lwr = min(pct_ci),
+    pct_upr = max(pct_ci)
+  )
+}
+
+effect_per_0.1(m_L)  # WS_L
+effect_per_0.1(m_U)  # WS_U
+
+df_sp_trait <- df_sp_trait %>%
+  mutate(WS_mid = (WS_L + WS_U) / 2)
+
+# Plot
+ggplot(df_sp_trait, aes(prop_mean, log10(WS_mid))) +
+  geom_point(alpha = 0.5, size = 1.6) +
+  geom_smooth(method = "lm", se = TRUE) +
+  theme_classic() +
+  labs(
+    x = "Mean proportion of range in the tropics",
+    y = expression(log[10]*"(wingspan metric)")
+  )
+
+
+ Load libraries
+library(terra)
+library(dplyr)
+library(stringr)
+library(tidyr)
+library(purrr)
+library(ggplot2)
+library(lme4)
+library(lmerTest)
+
+# Import data
+trait_range <- read_csv("output/trait_range.csv")
+
+# Parse raster filenames
+path <- "data/SuitabilityMaps_MigratorySpecies"
+
+ras_files <- list.files(path, pattern = "^Binary_S[1-4].*", full.names = TRUE, recursive = TRUE)
+
+ras_meta <- tibble(file = ras_files) %>%
+  mutate(stem = tools::file_path_sans_ext(basename(file))) %>%
+  mutate(
+    season  = str_extract(stem, "S[1-4]"),
+    species = str_replace(stem, "^Binary_S[1-4]", "")
+  ) %>%
+  dplyr::select(file, species, season)
+
+# Latitude metrics from one raster
+lat_metrics_one <- function(f) {
+  r <- rast(f)
+  
+  # Ensure lon/lat so init(r, "y") is latitude in degrees
+  if (!is.lonlat(r)) r <- project(r, "EPSG:4326", method = "near")
+  
+  occ <- (r == 1)
+  if (global(occ, "sum", na.rm = TRUE)[1, 1] == 0) {
+    return(tibble(mean_lat = NA_real_, mean_abs_lat = NA_real_,
+                  lat_min = NA_real_, lat_max = NA_real_, lat_span = NA_real_))
+  }
+  
+  lat <- init(r, "y")
+  a   <- cellSize(r, unit = "km")  # area weights
+  
+  # Total occupied area
+  area_total <- global(mask(a, occ, maskvalues = 0), "sum", na.rm = TRUE)[1, 1]
+  
+  # Area-weighted means
+  mean_lat     <- global(mask(lat * a, occ, maskvalues = 0), "sum", na.rm = TRUE)[1, 1] / area_total
+  mean_abs_lat <- global(mask(abs(lat) * a, occ, maskvalues = 0), "sum", na.rm = TRUE)[1, 1] / area_total
+  
+  # Range in latitude
+  lat_min <- global(mask(lat, occ, maskvalues = 0), "min", na.rm = TRUE)[1, 1]
+  lat_max <- global(mask(lat, occ, maskvalues = 0), "max", na.rm = TRUE)[1, 1]
+  
+  tibble(
+    mean_lat     = mean_lat,
+    mean_abs_lat = mean_abs_lat,
+    lat_min      = lat_min,
+    lat_max      = lat_max,
+    lat_span     = lat_max - lat_min
+  )
+}
+
+# Compute latitude metrics for all rasters + join to trait table
+lat_df <- ras_meta %>%
+  mutate(metrics = purrr::map(file, lat_metrics_one)) %>%
+  unnest(metrics) %>%
+  dplyr::select(species, season, mean_lat, mean_abs_lat, lat_min, lat_max, lat_span)
+
+trait_range2 <- trait_range %>%
+  mutate(species_key = str_replace_all(species, " ", "_")) %>%
+  left_join(
+    lat_df %>% rename(species_key = species),
+    by = c("species_key", "season")
+  ) %>%
+  dplyr::select(-species_key)
+
+# Species-level latitude (abs) + traits (WS_L, WS_U)
+df_lat_sp <- trait_range2 %>%
+  group_by(species, Family) %>%
+  summarise(
+    abs_lat = mean(mean_abs_lat, na.rm = TRUE),
+    WS_L    = first(WS_L[!is.na(WS_L)]),
+    WS_U    = first(WS_U[!is.na(WS_U)]),
+    .groups = "drop"
+  ) %>%
+  filter(is.finite(abs_lat))
+
+# Fit mixed models (Family random intercept)
+m_lat_L <- lmer(log10(WS_L) ~ abs_lat + (1 | Family),
+                data = df_lat_sp %>% filter(is.finite(WS_L), WS_L > 0))
+
+m_lat_U <- lmer(log10(WS_U) ~ abs_lat + (1 | Family),
+                data = df_lat_sp %>% filter(is.finite(WS_U), WS_U > 0))
+
+summary(m_lat_L)
+summary(m_lat_U)
+
+# Plot (WS_U shown; swap WS_L if needed)
+p_lat_U <- ggplot(df_lat_sp %>% filter(is.finite(WS_U), WS_U > 0),
+                  aes(abs_lat, log10(WS_U))) +
+  geom_point(aes(shape = Family), alpha = 0.5, size = 1.6) +
+  geom_smooth(method = "lm", se = TRUE) +
+  theme_classic() +
+  labs(x = "Mean absolute latitude of occupied cells (°)",
+       y = expression(log[10]*"(WS_U)"))
+
+p_lat_U
+
+# Effect size helper: % change per delta degrees
+effect_per_deg <- function(mod, term = "abs_lat", delta = 10) {
+  b  <- fixef(mod)[term]
+  se <- summary(mod)$coefficients[term, "Std. Error"]
+  
+  b_ci <- b + c(-1, 1) * 1.96 * se
+  
+  mult    <- 10^(b * delta)
+  mult_ci <- 10^(b_ci * delta)
+  
+  pct    <- (mult - 1) * 100
+  pct_ci <- (mult_ci - 1) * 100
+  
+  tibble(
+    term = term,
+    delta_deg = delta,
+    multiplier = mult,
+    pct_change = pct,
+    pct_lwr = min(pct_ci),
+    pct_upr = max(pct_ci)
+  )
+}
+
+effect_per_deg(m_lat_L, delta = 10)
+effect_per_deg(m_lat_U, delta = 10)
+
+#### add in rapport
+df_lat_sp <- df_lat_sp %>%
+  mutate(species = str_replace_all(species, " ", "_"))
+
+df_combined <- df_phylo_scaled %>%
+  left_join(df_lat_sp %>% dplyr::select(abs_lat, species, WS_L, WS_U), by = "species")
+
+df_model_WS_L <- df_combined %>%
+  filter(!is.na(WS_L), WS_L > 0) %>%
+  mutate(
+    log_WS_L_z = as.numeric(scale(log10(WS_L))) 
+  )
+
+df_model_WS_U <- df_combined %>%
+  filter(!is.na(WS_U), WS_U > 0) %>%
+  mutate(
+    log_WS_U_z = as.numeric(scale(log10(WS_U))) 
+  )
+
+cat("WS_L:", length(unique(df_model_WS_L$species)), "\n")
+cat("WS_U:", length(unique(df_model_WS_U$species)), "\n")
+
+m_rapoport_with_size_L <- brm(
+  log10(range_km2) ~ mean_bio4_z + prop_within_z + log_WS_L_z + season + 
+    (1 | gr(species_phylo, dist = "gaussian")),
+  data = df_model_WS_L,
+  data2 = list(species_phylo = A),
+  family = gaussian(),
+  prior = c(
+    prior(normal(0, 1), class = "b"),         
+    prior(exponential(1), class = "sd"),     
+    prior(exponential(1), class = "sigma") 
+  ),
+  chains = 4, 
+  iter = 6000,     
+  warmup = 2000,   
+  cores = 4,
+  control = list(
+    adapt_delta = 0.99,       
+    max_treedepth = 15        
+  )
+)
+
+m_rapoport_with_size_U <- brm(
+  log10(range_km2) ~ mean_bio4_z + prop_within_z + log_WS_U_z + season + 
+    (1 | gr(species_phylo, dist = "gaussian")),
+  data = df_model_WS_U,
+  data2 = list(species_phylo = A),
+  family = gaussian(),
+  prior = c(
+    prior(normal(0, 1), class = "b"),         
+    prior(exponential(1), class = "sd"),     
+    prior(exponential(1), class = "sigma") 
+  ),
+  chains = 4, 
+  iter = 6000,     
+  warmup = 2000,   
+  cores = 4,
+  control = list(
+    adapt_delta = 0.99,       
+    max_treedepth = 15        
+  )
+)
+
+summary(m_rapoport_with_size_L)
+summary(m_rapoport_with_size_U)
+
+
+#SIZE AND RANGE?
+final_df_lat <- final_df %>%
+ left_join(df_lat_sp , by = "species")
+
+m_pattern_lat<- lmer(log10(range_km2) ~ abs_lat+prop_within + season + (1 | species), data = final_df_lat)
+summary(m_pattern_lat)
+
+m_pattern<- lmer(log10(range_km2) ~ prop_mean+prop_within + season + (1 | species), data = final_df_lat)
+
+anova(m_pattern,m_pattern_lat)
+
+#m_pattern better
+
+#try ratio log(size/range)
+#dispersal ability vs. T. adaptability
+
+final_df_lat <- final_df_lat %>%
+  mutate(expansion_efficiency = log10(range_km2) - log10(WS_L))
+
+m_interact<- lmer(log10(range_km2) ~ abs_lat*log10(WS_L) + prop_within + season + (1 | species), 
+                  data = final_df_lat)
+summary(m_interact)
+#relationship between wing size and range size changes depending on latitude
+
+
+m_efficiency <- lmer(expansion_efficiency ~ abs_lat + prop_within + season + (1 | species), 
+                     data = final_df_lat)
+
+summary(m_efficiency)
+
+```
+
