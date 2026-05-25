@@ -180,11 +180,7 @@ clean_plot <- plot(predictions_clean) +
   # 添加 viridis 配色方案
   scale_color_viridis_d(option = "viridis") + 
   scale_fill_viridis_d(option = "viridis") +
-  theme_minimal() +
-  theme(
-    text = element_text(size = 12),
-    plot.title = element_text(face = "bold", hjust = 0.5)
-  )
+  theme_classic() 
 
 print(clean_plot)
 #phylo

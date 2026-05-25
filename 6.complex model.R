@@ -149,7 +149,6 @@ mcmc_pairs(posterior, pars = c("b_Intercept", "b_mean_bio4_z", "b_mean_bio15_z",
 
 
 
-
 #################### sensitive test #############################
 m_subset_glmm <- brm(
   log10(range_km2) ~ mean_bio4_z + mean_bio15_z + mean_elev_z + 
@@ -308,4 +307,27 @@ ggplot(df, aes(x = Estimate, y = Variable, color = Model, fill = Model)) +
         panel.grid.minor = element_blank()) +
   labs(title = "Model Comparison with Visible Error Bars",
        x = "Estimate (95% CI)")
+
+
+#loo compare
+m_no_phylo <- m_no_phylo_bayes <- brm(
+  formula = log10(range_km2) ~ mean_bio4_z + mean_bio15_z + mean_elev_z + prop_within_z + season,
+  data = df_model_WS_L,
+  family = gaussian(),
+  chains = 4, 
+  iter = 2000,       
+  cores = 4          
+)
+
+m_no_phylo_all <- m_no_phylo_bayes <- brm(
+  formula = log10(range_km2) ~ mean_bio4 + mean_bio15 + mean_elev + prop_within + season,
+  data = final_df,
+  family = gaussian(),
+  chains = 4, 
+  iter = 2000,       
+  cores = 4          
+)
+
+loo_compare(loo(m_combined_phylo), loo(m_no_phylo))
+
 

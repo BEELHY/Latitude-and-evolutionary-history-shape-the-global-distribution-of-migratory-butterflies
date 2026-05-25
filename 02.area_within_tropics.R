@@ -393,3 +393,32 @@ ggplot(draws, aes(x = lambda)) +
   theme_minimal()
 
 
+m_sensitive <- brm(
+  log10(range_km2) ~  season + 
+    (1 | gr(species_phylo, dist = "gaussian")),
+  data = df_phylo_scaled,
+  data2 = list(species_phylo = A),
+  family = gaussian(),
+  prior = c(
+    prior(normal(0, 1), class = "b"),         
+    prior(student_t(3, 0, 1), class = "sd"),  
+    prior(student_t(3, 0, 1), class = "sigma") 
+  ),
+  chains = 4, 
+  iter = 6000,     
+  warmup = 2000,   
+  cores = 4,
+  control = list(
+    adapt_delta = 0.99,       
+    max_treedepth = 15        
+  )
+)
+
+summary(m_sensitive)
+
+
+# see difference
+df_lat_sp$in_bpmm <- df_lat_sp$species %in% df_phylo$species
+
+t.test(log10(range_km2) ~ in_bpmm, data = df_wb)
+

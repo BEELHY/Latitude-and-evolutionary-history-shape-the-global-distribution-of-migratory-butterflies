@@ -1,12 +1,37 @@
+# ── R project ──────────────────────────────────────────────────────────────────
 .Rproj.user
 .Rhistory
 .RData
+.RDataTmp
 .Ruserdata
+
+# ── Large / raw data files ──────────────────────────────────────────────────────
 *.csv
 *.tif
 *.zip
-*.png
-output
-data
-worldclim_data
+data/
+output/
+worldclim_data/
+
+# ── Generated R plots ───────────────────────────────────────────────────────────
+Rplot.png
+
+# ── Web app — butterfly-outreach ────────────────────────────────────────────────
+butterfly-outreach/node_modules/
+butterfly-outreach/dist/
+butterfly-outreach/.parcel-cache/
+butterfly-outreach/.cache/
+butterfly-outreach/index.html''
+
+# Generated base64 asset (regenerate with: python3 scripts/encode_figures.py)
+butterfly-outreach/src/assets/figures.ts
+# Exported PNGs (regenerate with: sips -s format png <PDF> --out <PNG>)
+butterfly-outreach/src/assets/figures/
+butterfly-outreach/public/figures/
+
+# ── Claude Code session files ───────────────────────────────────────────────────
+.claude/
+
+# ── macOS ───────────────────────────────────────────────────────────────────────
 .DS_Store
+**/.DS_Store
