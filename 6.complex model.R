@@ -319,6 +319,8 @@ m_no_phylo <- m_no_phylo_bayes <- brm(
   cores = 4          
 )
 
+summary(m_no_phylo)
+
 m_no_phylo_all <- m_no_phylo_bayes <- brm(
   formula = log10(range_km2) ~ mean_bio4 + mean_bio15 + mean_elev + prop_within + season,
   data = final_df,
@@ -327,6 +329,8 @@ m_no_phylo_all <- m_no_phylo_bayes <- brm(
   iter = 2000,       
   cores = 4          
 )
+
+summary(m_no_phylo_all)
 
 loo_compare(loo(m_combined_phylo), loo(m_no_phylo))
 

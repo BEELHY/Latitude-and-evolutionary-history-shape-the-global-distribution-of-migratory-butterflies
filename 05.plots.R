@@ -13,6 +13,7 @@ library(sjPlot)
 library(ggeffects)   
 library(ggplot2)
 library(stringr)
+library(car)
 
 
 df_plot2_1 <- df_lat_sp %>%
@@ -152,7 +153,15 @@ final_df_lat_clean$log_range<-log10(final_df_lat$range_km2)
 
 m_clean <- lmer(log_range ~ abs_lat*log_WS + prop_within + season + (1 | species), 
                      data = final_df_lat_clean)
+m_clean_vif <- lmer(log_range ~ abs_lat+log_WS + prop_within + season + (1 | species), 
+                data = final_df_lat_clean)
+
 predictions_clean <- ggpredict(m_clean, terms = c("log_WS", "abs_lat [0, 18.2, 40, 60]"))
+
+performance::check_model(m_clean)
+performance::check_model(m_clean_vif)
+
+vif(m_clean_vif)
 
 clean_plot <- plot(predictions_clean) +
   labs(
