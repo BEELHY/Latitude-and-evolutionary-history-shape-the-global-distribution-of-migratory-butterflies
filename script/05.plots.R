@@ -112,6 +112,40 @@ ggplot() +
   ) +
   theme_classic()
 
+#Figure 2c robustness check: does the Bio4 effect hold after controlling for phylogeny?
+mech_compare <- bind_rows(
+  broom.mixed::tidy(m_mechanism_full_z, effects = "fixed", conf.int = TRUE) %>%
+    mutate(model = "Full data (no phylogeny)"),
+  broom.mixed::tidy(m_mechanism_subset_z, effects = "fixed", conf.int = TRUE) %>%
+    mutate(model = "Phylo subset (no phylogeny)"),
+  broom.mixed::tidy(m_mechanism_phylo, conf.int = TRUE) %>%
+    mutate(model = "Phylo subset (phylogenetic GLMM)")
+) %>%
+  filter(term == "mean_bio4_z") %>%
+  mutate(model = factor(model, levels = c(
+    "Full data (no phylogeny)",
+    "Phylo subset (no phylogeny)",
+    "Phylo subset (phylogenetic GLMM)"
+  )))
+
+ggplot(mech_compare, aes(x = estimate, y = model, color = model)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0.15, linewidth = 0.9) +
+  geom_point(size = 3) +
+  scale_color_manual(values = c(
+    "Full data (no phylogeny)"          = "#16A085",
+    "Phylo subset (no phylogeny)"       = "#2E86C1",
+    "Phylo subset (phylogenetic GLMM)"  = "#E67E22"
+  )) +
+  labs(
+    title = "Figure 2c robustness check",
+    subtitle = "Standardized effect of temperature seasonality (Bio4) on log10 Range Size,\nwith vs. without phylogenetic control",
+    x = "Standardized coefficient (95% CI/CrI)",
+    y = NULL
+  ) +
+  theme_classic() +
+  theme(legend.position = "none")
+
 #size vs Range
 
 df_synthesis <- final_df %>%
@@ -124,6 +158,7 @@ df_sp_level <- df_synthesis %>%
     mean_range = mean(range_km2),
     prop_mean=first(prop_mean),
     WS_U = first(WS_U),
+    WS_L = first(WS_L),
     abs_lat = first(abs_lat),
     .groups = "drop"
   )
@@ -192,6 +227,95 @@ clean_plot <- plot(predictions_clean) +
   theme_classic() 
 
 print(clean_plot)
+
+#Wing size x Latitude interaction, phylogeny-controlled robustness check + visualization
+interact_compare <- bind_rows(
+  broom.mixed::tidy(m_interact_full_z, effects = "fixed", conf.int = TRUE) %>%
+    mutate(model = "Full data (no phylogeny)"),
+  broom.mixed::tidy(m_interact_subset_z, effects = "fixed", conf.int = TRUE) %>%
+    mutate(model = "Phylo subset (no phylogeny)"),
+  broom.mixed::tidy(m_interact_phylo, conf.int = TRUE) %>%
+    mutate(model = "Phylo subset (phylogenetic GLMM)")
+) %>%
+  filter(term == "abs_lat_z:log_WS_U_z") %>%
+  mutate(model = factor(model, levels = c(
+    "Full data (no phylogeny)",
+    "Phylo subset (no phylogeny)",
+    "Phylo subset (phylogenetic GLMM)"
+  )))
+
+p_interact_compare <- ggplot(interact_compare, aes(x = estimate, y = model, color = model)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0.15, linewidth = 0.9) +
+  geom_point(size = 3) +
+  scale_color_manual(values = c(
+    "Full data (no phylogeny)"          = "#16A085",
+    "Phylo subset (no phylogeny)"       = "#2E86C1",
+    "Phylo subset (phylogenetic GLMM)"  = "#E67E22"
+  )) +
+  labs(
+    title = "Wing size x Latitude interaction: robustness check",
+    subtitle = "Standardized abs_lat x log(WS_U) interaction on log10 Range Size,\nwith vs. without phylogenetic control",
+    x = "Standardized interaction coefficient (95% CI/CrI)",
+    y = NULL
+  ) +
+  theme_classic() +
+  theme(legend.position = "none")
+
+print(p_interact_compare)
+
+# predicted wing-size effect on range size at low / median / high latitude, from the phylo model
+ws_mean  <- mean(log10(df_model_WS_U_lat$WS_U))
+ws_sd    <- sd(log10(df_model_WS_U_lat$WS_U))
+lat_mean <- mean(df_model_WS_U_lat$abs_lat)
+lat_sd   <- sd(df_model_WS_U_lat$abs_lat)
+lat_q    <- quantile(df_model_WS_U_lat$abs_lat, probs = c(0.1, 0.5, 0.9))
+lat_q_z  <- as.numeric((lat_q - lat_mean) / lat_sd)
+
+n_grid <- 50
+pred_grid <- expand.grid(
+  log_WS_U_z    = seq(min(df_model_WS_U_lat$log_WS_U_z), max(df_model_WS_U_lat$log_WS_U_z), length.out = n_grid),
+  abs_lat_z     = lat_q_z,
+  prop_within_z = 0,
+  season        = factor("S1", levels = levels(df_model_WS_U_lat$season))
+)
+pred_grid$lat_group <- rep(
+  factor(paste0(c("Low (10th pct, ", "Median (", "High (90th pct, "), round(lat_q, 1), "°)"),
+         levels = paste0(c("Low (10th pct, ", "Median (", "High (90th pct, "), round(lat_q, 1), "°)")),
+  each = n_grid
+)
+
+pred_fitted <- fitted(m_interact_phylo, newdata = pred_grid, re_formula = NA, summary = TRUE)
+pred_grid <- pred_grid %>%
+  mutate(
+    fit      = pred_fitted[, "Estimate"],
+    lwr      = pred_fitted[, "Q2.5"],
+    upr      = pred_fitted[, "Q97.5"],
+    WS_U_raw = 10^(log_WS_U_z * ws_sd + ws_mean)
+  )
+
+p_interact <- ggplot(pred_grid, aes(x = WS_U_raw, y = fit, color = lat_group, fill = lat_group)) +
+  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.15, color = NA) +
+  geom_line(linewidth = 1.1) +
+  scale_x_log10() +
+  scale_color_viridis_d(option = "viridis") +
+  scale_fill_viridis_d(option = "viridis") +
+  labs(
+    title = "Wing Size x Latitude Interaction on Range Size (phylogeny-controlled)",
+    subtitle = "Predicted from m_interact_phylo; other covariates held at reference values",
+    x = "Wing Span, Upper (mm, log scale)",
+    y = expression("Predicted " * log[10] * " Range Size (" * km^2 * ")"),
+    color = "Latitude", fill = "Latitude"
+  ) +
+  theme_classic()
+
+print(p_interact)
+
+dir.create("output/phylo_export", showWarnings = FALSE, recursive = TRUE)
+write_csv(interact_compare, "output/phylo_export/figure2d_interaction_phylo_comparison.csv")
+ggsave("output/phylo_export/figure2d_interaction_phylo_comparison.png", p_interact_compare, width = 8, height = 4, dpi = 200)
+ggsave("output/phylo_export/figure2d_wingsize_latitude_interaction.png", p_interact, width = 7, height = 5, dpi = 200)
+
 #phylo
 
 family_data <- df_lat_sp %>%

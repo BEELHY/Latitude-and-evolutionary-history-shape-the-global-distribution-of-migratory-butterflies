@@ -393,6 +393,50 @@ ggplot(draws, aes(x = lambda)) +
   theme_minimal()
 
 
+#############################Figure 2c robustness check: mechanism model (Bio4) with phylogenetic control
+# same predictors as m_mechanism (mean_bio4 + prop_within + season), refit with a phylogenetic
+# random effect on the phylo subset, plus z-scored full-data / subset-data lmer versions so the
+# Bio4 effect is comparable in standardized units across all three (mirrors the sensitivity-check
+# pattern already used for the combined model in "6.complex model.R").
+
+final_df_z <- final_df %>%
+  mutate(
+    mean_bio4_z   = as.numeric(scale(mean_bio4)),
+    prop_within_z = as.numeric(scale(prop_within))
+  )
+
+m_mechanism_full_z <- lmer(log10(range_km2) ~ mean_bio4_z + prop_within_z + season + (1 | species),
+                            data = final_df_z)
+
+m_mechanism_subset_z <- lmer(log10(range_km2) ~ mean_bio4_z + prop_within_z + season + (1 | species),
+                              data = df_phylo_scaled)
+
+m_mechanism_phylo <- brm(
+  log10(range_km2) ~ mean_bio4_z + prop_within_z + season +
+    (1 | gr(species_phylo, dist = "gaussian")),
+  data = df_phylo_scaled,
+  data2 = list(species_phylo = A),
+  family = gaussian(),
+  prior = c(
+    prior(normal(0, 1), class = "b"),
+    prior(student_t(3, 0, 1), class = "sd"),
+    prior(student_t(3, 0, 1), class = "sigma")
+  ),
+  chains = 4,
+  iter = 6000,
+  warmup = 2000,
+  cores = 4,
+  control = list(
+    adapt_delta = 0.99,
+    max_treedepth = 15
+  )
+)
+
+summary(m_mechanism_full_z)
+summary(m_mechanism_subset_z)
+summary(m_mechanism_phylo)
+
+
 m_sensitive <- brm(
   log10(range_km2) ~  season + 
     (1 | gr(species_phylo, dist = "gaussian")),

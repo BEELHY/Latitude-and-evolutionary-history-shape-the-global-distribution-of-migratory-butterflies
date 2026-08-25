@@ -225,8 +225,55 @@ summary(m_interact)
 #relationship between wing size and range size changes depending on latitude
 
 
-m_efficiency <- lmer(expansion_efficiency ~ abs_lat + prop_within + season + (1 | species), 
+m_efficiency <- lmer(expansion_efficiency ~ abs_lat + prop_within + season + (1 | species),
                      data = final_df_lat)
 
 summary(m_efficiency)
+
+#### Wing size x Latitude interaction on Range Size, with phylogenetic control
+# extends m_interact above (abs_lat * log10(WS_L)) using WS_U + the phylo subset/covariance
+# already built for df_model_WS_U, so the interaction is comparable full-data / subset / phylo.
+
+final_df_lat_z <- final_df_lat %>%
+  filter(!is.na(WS_U), WS_U > 0, is.finite(abs_lat)) %>%
+  mutate(
+    log_WS_U_z   = as.numeric(scale(log10(WS_U))),
+    abs_lat_z    = as.numeric(scale(abs_lat)),
+    prop_within_z = as.numeric(scale(prop_within))
+  )
+
+m_interact_full_z <- lmer(log10(range_km2) ~ abs_lat_z * log_WS_U_z + prop_within_z + season + (1 | species),
+                           data = final_df_lat_z)
+
+df_model_WS_U_lat <- df_model_WS_U %>%
+  filter(is.finite(abs_lat)) %>%
+  mutate(abs_lat_z = as.numeric(scale(abs_lat)))
+
+m_interact_subset_z <- lmer(log10(range_km2) ~ abs_lat_z * log_WS_U_z + prop_within_z + season + (1 | species),
+                             data = df_model_WS_U_lat)
+
+m_interact_phylo <- brm(
+  log10(range_km2) ~ abs_lat_z * log_WS_U_z + prop_within_z + season +
+    (1 | gr(species_phylo, dist = "gaussian")),
+  data = df_model_WS_U_lat,
+  data2 = list(species_phylo = A),
+  family = gaussian(),
+  prior = c(
+    prior(normal(0, 1), class = "b"),
+    prior(student_t(3, 0, 1), class = "sd"),
+    prior(student_t(3, 0, 1), class = "sigma")
+  ),
+  chains = 4,
+  iter = 6000,
+  warmup = 2000,
+  cores = 4,
+  control = list(
+    adapt_delta = 0.99,
+    max_treedepth = 15
+  )
+)
+
+summary(m_interact_full_z)
+summary(m_interact_subset_z)
+summary(m_interact_phylo)
 
