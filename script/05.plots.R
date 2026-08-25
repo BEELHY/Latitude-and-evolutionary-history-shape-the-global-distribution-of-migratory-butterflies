@@ -264,26 +264,25 @@ p_interact_compare <- ggplot(interact_compare, aes(x = estimate, y = model, colo
 
 print(p_interact_compare)
 
-# predicted wing-size effect on range size at low / median / high latitude, from the phylo model
+# predicted wing-size effect on range size across latitude, from the phylo model
+# uses the same 4 latitude levels as the non-phylo "Figure 2.4" plot (m_clean / clean_plot above)
+# for direct comparability
 ws_mean  <- mean(log10(df_model_WS_U_lat$WS_U))
 ws_sd    <- sd(log10(df_model_WS_U_lat$WS_U))
 lat_mean <- mean(df_model_WS_U_lat$abs_lat)
 lat_sd   <- sd(df_model_WS_U_lat$abs_lat)
-lat_q    <- quantile(df_model_WS_U_lat$abs_lat, probs = c(0.1, 0.5, 0.9))
-lat_q_z  <- as.numeric((lat_q - lat_mean) / lat_sd)
+lat_vals <- c(0, 18.2, 40, 60)
+lat_z    <- (lat_vals - lat_mean) / lat_sd
 
 n_grid <- 50
 pred_grid <- expand.grid(
   log_WS_U_z    = seq(min(df_model_WS_U_lat$log_WS_U_z), max(df_model_WS_U_lat$log_WS_U_z), length.out = n_grid),
-  abs_lat_z     = lat_q_z,
+  abs_lat_z     = lat_z,
   prop_within_z = 0,
   season        = factor("S1", levels = levels(df_model_WS_U_lat$season))
 )
-pred_grid$lat_group <- rep(
-  factor(paste0(c("Low (10th pct, ", "Median (", "High (90th pct, "), round(lat_q, 1), "°)"),
-         levels = paste0(c("Low (10th pct, ", "Median (", "High (90th pct, "), round(lat_q, 1), "°)")),
-  each = n_grid
-)
+lat_labels <- paste0(lat_vals, "°")
+pred_grid$lat_group <- rep(factor(lat_labels, levels = lat_labels), each = n_grid)
 
 pred_fitted <- fitted(m_interact_phylo, newdata = pred_grid, re_formula = NA, summary = TRUE)
 pred_grid <- pred_grid %>%
@@ -305,7 +304,7 @@ p_interact <- ggplot(pred_grid, aes(x = WS_U_raw, y = fit, color = lat_group, fi
     subtitle = "Predicted from m_interact_phylo; other covariates held at reference values",
     x = "Wing Span, Upper (mm, log scale)",
     y = expression("Predicted " * log[10] * " Range Size (" * km^2 * ")"),
-    color = "Latitude", fill = "Latitude"
+    color = "Absolute Latitude", fill = "Absolute Latitude"
   ) +
   theme_classic()
 
