@@ -1,6 +1,0 @@
-# Track only script/
-/*
-!/.gitignore
-!/script/
-script/**/.claude/
-.DS_Store
