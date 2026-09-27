@@ -1,4 +1,4 @@
-# Standardise suitability map file names.
+# Standardise species map names.
 
 library(dplyr)
 library(stringr)

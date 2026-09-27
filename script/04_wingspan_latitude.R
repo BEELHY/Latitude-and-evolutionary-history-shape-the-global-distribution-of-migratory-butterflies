@@ -1,4 +1,4 @@
-# Wingspan versus latitude and wingspan-latitude interaction models.
+# Wingspan-latitude models.
 
 library(terra)
 library(dplyr)

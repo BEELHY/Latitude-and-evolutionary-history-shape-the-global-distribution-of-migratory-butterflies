@@ -1,4 +1,4 @@
-# Hotspot metrics by zoogeographic realm.
+# Hotspots by realm.
 
 library(dplyr)
 library(tidyr)

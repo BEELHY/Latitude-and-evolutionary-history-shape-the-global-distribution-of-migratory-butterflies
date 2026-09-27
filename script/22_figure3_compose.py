@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Compose Figure 3 with labels and butterfly images.
+# Compose Figure 3.
 
 from pathlib import Path
 import math

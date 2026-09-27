@@ -1,4 +1,4 @@
-# Land cells per zoogeographic realm.
+# Land cells per realm.
 
 suppressPackageStartupMessages({library(terra); library(sf)})
 sf_use_s2(FALSE)

@@ -1,4 +1,4 @@
-# Climate-baseline Bayesian phylogenetic mixed models.
+# Phylogenetic mixed models.
 
 library(tidybayes)
 library(bayesplot)

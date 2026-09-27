@@ -1,4 +1,4 @@
-# Install packages for HPC runs.
+# Install HPC packages.
 
 dir.create(Sys.getenv("R_LIBS_USER"), recursive=TRUE, showWarnings=FALSE)
 .libPaths(Sys.getenv("R_LIBS_USER"))

@@ -1,4 +1,4 @@
-# Hotspot metrics by region.
+# Hotspots by region.
 
 library(dplyr)
 library(tidyr)

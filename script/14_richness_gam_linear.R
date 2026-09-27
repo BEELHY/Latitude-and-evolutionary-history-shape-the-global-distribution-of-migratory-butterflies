@@ -1,4 +1,4 @@
-# Linear-covariate richness GAMs with spatial smooth.
+# Linear GAM, NRI/NTI appendix.
 
 suppressMessages({
   library(dplyr)

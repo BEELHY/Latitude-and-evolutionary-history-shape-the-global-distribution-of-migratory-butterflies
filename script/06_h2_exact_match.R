@@ -1,4 +1,4 @@
-# H2 sensitivity using exact phylogeny matches only.
+# H2 exact-match sensitivity.
 
 suppressMessages({
   library(dplyr)
@@ -138,4 +138,4 @@ cat("\nFixed effects, full reconstructed pool:\n"); print(res_full$fixef)
 cat("\nFixed effects, exact-match-only subset:\n"); print(res_exact$fixef)
 cat("\nManuscript-reported reference: H2 = 0.89, 95% CI [0.86, 0.91], N = 783 obs / 207 species\n")
 cat("If Model A's H2 is not close to 0.89, the reconstructed dataset differs from the\n")
-cat("original 'script/6.complex model.R' pipeline and Model B should not be trusted as-is.\n")
+cat("original 'script/05_phylo_bpmm.R' pipeline and Model B should not be trusted as-is.\n")

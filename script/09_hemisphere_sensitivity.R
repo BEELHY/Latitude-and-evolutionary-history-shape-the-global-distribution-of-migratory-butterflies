@@ -1,4 +1,4 @@
-# Northern versus southern hemisphere sensitivity.
+# Hemisphere sensitivity test.
 
 setwd("/Users/hlii0385/Desktop/Phd_Haiyu_LI/Rapoport-s-rule-and-Bergmann-s-rule-of-Migratory-butterflies")
 

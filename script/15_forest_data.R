@@ -1,4 +1,4 @@
-# Forest plot of main GAM, built-up reference.
+# Forest plot data.
 
 suppressMessages({
   library(mgcv)

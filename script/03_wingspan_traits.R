@@ -1,4 +1,4 @@
-# Match LepTraits wingspan data to migratory species.
+# Match wingspan trait data.
 
 library(tidyverse)
 library(dplyr)

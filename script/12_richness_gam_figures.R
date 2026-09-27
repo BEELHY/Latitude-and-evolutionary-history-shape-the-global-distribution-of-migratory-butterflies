@@ -1,4 +1,4 @@
-# Figures for spatial richness model.
+# Richness GAM diagnostic figures.
 
 library(mgcv)
 library(ggplot2)

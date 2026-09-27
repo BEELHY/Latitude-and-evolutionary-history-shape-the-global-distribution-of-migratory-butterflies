@@ -1,4 +1,4 @@
-# Richness GAMs with NRI/NTI phylogenetic sensitivity.
+# NRI/NTI grid data.
 
 suppressMessages({
   library(terra)

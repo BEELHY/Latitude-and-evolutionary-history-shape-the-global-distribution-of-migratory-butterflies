@@ -1,4 +1,4 @@
-# Range size, tropical proportion and phylogenetic models.
+# Range size and tropicality.
 
 library(terra)
 library(dplyr)

@@ -1,4 +1,4 @@
-# Extract signed centroid latitude per species.
+# Signed centroid latitude.
 
 setwd("/Users/hlii0385/Desktop/Phd_Haiyu_LI/Rapoport-s-rule-and-Bergmann-s-rule-of-Migratory-butterflies")
 suppressPackageStartupMessages({ library(terra); library(dplyr); library(stringr) })

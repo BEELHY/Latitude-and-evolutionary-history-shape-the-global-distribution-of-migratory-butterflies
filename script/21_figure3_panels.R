@@ -1,4 +1,4 @@
-# Render Figure 3 tree, histogram and legend.
+# Figure 3 tree and inset.
 
 suppressPackageStartupMessages({
   library(dplyr)
@@ -140,7 +140,7 @@ ggsave(file.path(out_dir, "Figure3_hist.png"), p_hist,
        width = 1.95, height = 1.6,
        dpi = 300, bg = "transparent")
 cat(sprintf("Saved: %s and Figure3_hist.png\n", file.path(out_dir, "Figure3_base.png")))
-cat("Next: run script/14.figure3_compose.py to overlay family labels + butterfly photos\n")
+cat("Next: run script/22_figure3_compose.py to overlay family labels + butterfly photos\n")
 cat("      at positions/angles/sizes read directly from output/Manuscript/figure 3.pdf.\n")
 
 cat("\n=== Methods paragraph to add (addresses reviewer comment C24) ===\n")

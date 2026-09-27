@@ -1,4 +1,4 @@
-# Render Figure 2 panels a-d.
+# Figure 2 panels.
 
 suppressPackageStartupMessages({
   library(dplyr)
@@ -155,4 +155,4 @@ save_panel(add_tag(p2c, "c"), "panel_c")
 save_panel(add_tag(p2d, "d"), "panel_d")
 
 cat(sprintf("Saved 4 panels (PNG @ %d dpi + PDF) to: %s\n", PANEL_DPI, panel_dir))
-cat("Next: run script/12.figure2_compose.py to lay them out into the final Figure 2 grid.\n")
+cat("Next: run script/20_figure2_compose.py to lay them out into the final Figure 2 grid.\n")

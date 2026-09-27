@@ -1,4 +1,4 @@
-# Spatial richness model test with Moran bootstrap.
+# Spatial richness GAM.
 
 library(mgcv)
 library(parallel)

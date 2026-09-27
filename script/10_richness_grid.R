@@ -1,4 +1,4 @@
-# Grid processing for seasonal-switching richness.
+# Build richness grid data.
 
 library(ranger)
 
