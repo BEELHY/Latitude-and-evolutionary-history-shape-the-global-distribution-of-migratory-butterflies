@@ -1,0 +1,207 @@
+---
+title: "Butterfly Migration: Range and Trait Analysis"
+output: html_document
+date: "2026-04-26"
+---
+
+<!-- Range and trait analysis notebook. -->
+
+```{r setup, include=FALSE}
+library(terra)
+library(dplyr)
+library(stringr)
+library(purrr)
+library(tibble)
+library(tidyr)
+library(ggplot2)
+library(lme4)
+library(lmerTest)
+library(MuMIn)
+library(ape)
+library(brms)
+library(tidybayes)
+library(broom.mixed)
+library(ggeffects)
+library(viridis)
+library(ggtree)
+library(ggtreeExtra)
+library(ggnewscale)
+library(phytools)
+library(patchwork)
+library(tidyverse)
+
+tax_map <- tribble(
+  ~species_prev, ~species_up,
+  "Allancastria_cerisyi",      "Zerynthia_cerisyi",
+  "Appias_drusilla",           "Glutophrissa_drusilla",
+  "Colias_sareptensis",        "Colias_alfacariensis",
+  "Eurema_lisa",               "Pyrisitia_lisa",
+  "Eurema_nicippe",            "Abaeis_nicippe",
+  "Euthalia_nais",             "Symphaedra_nais",
+  "Junonia_lavinia",           "Junonia_genoveva",
+  "Libytheana_carinenta",      "Prolibythea_carinenta",
+  "Papilio_anchisiades",       "Heraclides_anchisiades",
+  "Papilio_cresphontes",       "Heraclides_cresphontes",
+  "Papilio_menatius",          "Pterourus_menatius",
+  "Papilio_paeon",             "Heraclides_paeon",
+  "Papilio_thoas",             "Heraclides_thoas",
+  "Papilio_torquatus",         "Heraclides_torquatus",
+  "Papilio_troilus",           "Pterourus_troilus",
+  "Plebejus_acmon",            "Icaricia_acmon",
+  "Polyommatus_semiargus",     "Cyaniris_semiargus",
+  "Protographium_agesilaus",   "Eurytides_agesilaus",
+  "Protographium_philolaus",   "Eurytides_philolaus",
+  "Speyeria_callippe",         "Argynnis_callippe",
+  "Hylephila_phylaeus",        "Hylephila_phyleus"
+)
+
+dir_in <- "data/SuitabilityMaps_MigratorySpecies"
+files <- list.files(dir_in, pattern = "^Binary_S[1-4]", full.names = TRUE, recursive = TRUE)
+
+plan <- tibble(path = files, file = basename(path), dir = dirname(path)) %>%
+  mutate(
+    m = str_match(file, "^Binary_(S[1-4])(_?)([^.]+)(\\.[^.]+)$"),
+    season = m[,2],
+    sp_prev = m[,4]
+  ) %>%
+  left_join(tax_map, by = c("sp_prev" = "species_prev")) %>%
+  mutate(
+    new_file = if_else(!is.na(species_up), str_replace(file, sp_prev, species_up), file),
+    new_path = file.path(dir, new_file)
+  )
+
+to_rename <- plan %>% filter(path != new_path)
+if(nrow(to_rename) > 0) file.rename(to_rename$path, to_rename$new_path)
+
+files_new <- list.files(dir_in, pattern = "^Binary_S[1-4].*", full.names = TRUE, recursive = TRUE)
+bio4_ras <- rast("data/climate/wc2.1_2.5m_bio_4.tif")
+
+ras_meta <- tibble(file = files_new) %>%
+  mutate(stem = tools::file_path_sans_ext(basename(file)),
+         season = str_extract(stem, "S[1-4]"),
+         species = str_replace(stem, "^Binary_S[1-4]_?", ""))
+
+calc_all_metrics <- function(f, bio_layer) {
+  r <- rast(f)
+  occ <- (r == 1)
+  a <- cellSize(r, unit = "km")
+  lat <- init(r, "y")
+
+  range_km2 <- global(mask(a, occ, maskvalues = 0), "sum", na.rm = TRUE)[1,1]
+  if (is.na(range_km2) || range_km2 <= 0) return(NULL)
+
+  trop <- (lat >= -23.44) & (lat <= 23.44)
+  trop_km2 <- global(mask(a, occ & trop, maskvalues = 0), "sum", na.rm = TRUE)[1,1]
+  mean_abs_lat <- global(mask(abs(lat) * a, occ, maskvalues = 0), "sum", na.rm = TRUE)[1,1] / range_km2
+
+  bio_resampled <- resample(bio_layer, r)
+  mean_bio4 <- global(mask(bio_resampled, occ, maskvalues = 0), "mean", na.rm = TRUE)[1,1]
+
+  tibble(range_km2 = range_km2, prop_tropics = trop_km2/range_km2,
+         mean_abs_lat = mean_abs_lat, mean_bio4 = mean_bio4)
+}
+
+full_metrics <- ras_meta %>%
+  rowwise() %>%
+  mutate(res = list(calc_all_metrics(file, bio4_ras))) %>%
+  unnest(res) %>% ungroup()
+
+trait_raw <- read.csv("data/harmonized_LepTraits.csv")
+
+trait_clean <- trait_raw %>%
+  mutate(species_match = str_replace_all(ValidBinomial, " ", "_")) %>%
+  mutate(WS_L = coalesce(WS_L, (WS_L_Fem + WS_L_Mal)/2),
+         WS_U = coalesce(WS_U, (WS_U_Fem + WS_U_Mal)/2)) %>%
+  dplyr::select(species_match, Family, WS_L, WS_U)
+
+final_df <- full_metrics %>%
+  group_by(species) %>%
+  mutate(prop_mean = mean(prop_tropics), prop_within = prop_tropics - prop_mean) %>%
+  ungroup() %>%
+  left_join(trait_clean, by = c("species" = "species_match"))
+
+df_lat_sp <- final_df %>%
+  group_by(species, Family) %>%
+  summarise(abs_lat = mean(mean_abs_lat), WS_L = mean(WS_L), WS_U = mean(WS_U), .groups = "drop")
+
+m_lat_L <- lmer(log10(WS_L) ~ abs_lat + (1 | Family), data = df_lat_sp %>% filter(WS_L > 0))
+m_lat_U <- lmer(log10(WS_U) ~ abs_lat + (1 | Family), data = df_lat_sp %>% filter(WS_U > 0))
+m_pattern <- lmer(log10(range_km2) ~ prop_mean + prop_within + season + (1 | species), data = final_df)
+m_mechanism <- lmer(log10(range_km2) ~ mean_bio4 + prop_within + (1 | species), data = final_df)
+
+final_df_lat_clean <- final_df %>%
+  mutate(abs_lat = mean_abs_lat, log_WS = log10(WS_L), log_range = log10(range_km2)) %>%
+  filter(!is.na(log_WS), !is.na(log_range))
+
+m_clean <- lmer(log_range ~ abs_lat * log_WS + prop_within + season + (1 | species), data = final_df_lat_clean)
+
+df_plot2_1 <- df_lat_sp %>%
+  filter(is.finite(WS_L), WS_L > 0, is.finite(WS_U), WS_U > 0) %>%
+  pivot_longer(cols = c(WS_L, WS_U), names_to = "WS_type", values_to = "WS_value") %>%
+  mutate(WS_type = factor(WS_type, levels = c("WS_U", "WS_L"), labels = c("Upper (WS_U)", "Lower (WS_L)")))
+
+pred_L <- predict_response(m_lat_L, terms = "abs_lat", back_transform = FALSE) %>%
+  as_tibble() %>% mutate(WS_type = "Lower (WS_L)")
+pred_U <- predict_response(m_lat_U, terms = "abs_lat", back_transform = FALSE) %>%
+  as_tibble() %>% mutate(WS_type = "Upper (WS_U)")
+df_preds2_1 <- bind_rows(pred_L, pred_U) %>% rename(abs_lat = x, log10_WS = predicted)
+
+ggplot() +
+  geom_ribbon(data = df_preds2_1, aes(x = abs_lat, ymin = conf.low, ymax = conf.high, fill = WS_type), alpha = 0.2) +
+  geom_point(data = df_plot2_1, aes(x = abs_lat, y = log10(WS_value), color = WS_type, shape = Family), alpha=0.5, size=1.3) +
+  geom_line(data = df_preds2_1, aes(x = abs_lat, y = log10_WS, color = WS_type), size = 1.2) +
+  scale_color_manual(values = c("Lower (WS_L)" = "#56B4E9", "Upper (WS_U)" = "#D55E00")) +
+  scale_fill_manual(values = c("Lower (WS_L)" = "#56B4E9", "Upper (WS_U)" = "#D55E00")) +
+  scale_shape_manual(values = c(16, 17, 15, 18, 25, 0, 1, 2)) +
+  labs(title = "Bergmann's Rule", x = "Absolute Latitude", y = "log10 Wing Span (mm)") +
+  theme_classic()
+
+pred_pattern <- predict_response(m_pattern, terms = "prop_mean", back_transform = FALSE) %>%
+  as_tibble() %>% rename(prop_mean = x, log10_range = predicted)
+pred_mechanism <- predict_response(m_mechanism, terms = "mean_bio4", back_transform = FALSE) %>%
+  as_tibble() %>% rename(mean_bio4 = x, log10_range = predicted)
+
+ggplot() +
+  geom_ribbon(data = pred_pattern, aes(x = prop_mean, ymin = conf.low, ymax = conf.high), fill = "#D55E00", alpha = 0.2) +
+  geom_point(data = final_df, aes(x = prop_mean, y = log10(range_km2), color = mean_bio4), alpha = 0.3) +
+  scale_color_viridis_c(option = "viridis") +
+  geom_line(data = pred_pattern, aes(x = prop_mean, y = log10_range), color = "#D55E00", size = 1.2) +
+  theme_classic()
+
+ggplot() +
+  geom_ribbon(data = pred_mechanism, aes(x = mean_bio4, ymin = conf.low, ymax = conf.high), fill = "#D55E00", alpha = 0.2) +
+  geom_point(data = final_df, aes(x = mean_bio4, y = log10(range_km2), color = prop_mean), alpha = 0.3) +
+  scale_color_viridis_c(option = "viridis") +
+  geom_line(data = pred_mechanism, aes(x = mean_bio4, y = log10_range), color = "#D55E00", size = 1.2) +
+  theme_classic()
+
+predictions_clean <- ggpredict(m_clean, terms = c("log_WS", "abs_lat [0, 18.2, 40, 60]"))
+plot(predictions_clean) +
+  scale_color_viridis_d(option = "viridis") + scale_fill_viridis_d(option = "viridis") +
+  theme_minimal()
+  unnest(res) %>% ungroup()
+
+tree <- read.nexus("data/phylogenic/ntDegen359_fossils_smith_brown_strategyA.tre")
+tree$tip.label <- str_extract(tree$tip.label, "[A-Z][a-z]+_[a-z]+")
+tree_final <- keep.tip(tree, intersect(tree$tip.label, df_lat_sp$species))
+
+df_plot_final <- df_lat_sp %>%
+  filter(species %in% tree_final$tip.label) %>%
+  mutate(Range_Val = log10(WS_U)) %>%
+  rename(label = species)
+
+p_iter <- ggtree(tree_final, layout = "fan", open.angle = 15) %<+% df_plot_final +
+  geom_tree(aes(color = Range_Val), linewidth = 0.8) +
+  scale_color_viridis_c(option = "viridis", name = "log10 Range Size") +
+  new_scale_fill() +
+  geom_fruit(geom = geom_tile, mapping = aes(fill = Family), width = 5, offset = 0.08) +
+  scale_fill_brewer(palette = "Set3") +
+  theme(legend.position = "right")
+
+p_hist <- ggplot(df_plot_final, aes(x = Range_Val)) +
+  geom_histogram(aes(fill = after_stat(x)), bins = 20) +
+  scale_fill_viridis_c(guide = "none") + theme_void()
+
+p_iter + inset_element(p_hist, left = 0.35, bottom = 0.35, right = 0.65, top = 0.65)
+```
+

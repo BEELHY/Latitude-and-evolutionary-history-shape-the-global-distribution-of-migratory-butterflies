@@ -1,9 +1,4 @@
-# Export phylogeny + species-level data for Figure 2d (Wing Size vs. Range Size synthesis)
-# so a colleague can fit GLM/OLS models with phylogenetic control (e.g. PGLS via caper/nlme)
-# outside this pipeline.
-#
-# Run this after script/05.plots.R in the same R session — it needs tree_final and
-# df_phylo_final, both created there.
+# Export pruned tree and species data.
 
 library(ape)
 library(dplyr)

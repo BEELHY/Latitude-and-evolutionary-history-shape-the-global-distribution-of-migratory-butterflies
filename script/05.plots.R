@@ -1,3 +1,5 @@
+# Exploratory plots for range size, wingspan and phylogeny.
+
 library(ggplot2)
 library(phytools)
 library(dplyr)
@@ -9,18 +11,17 @@ library(tidybayes)
 library(broom.mixed)
 library(ggnewscale)
 library(ggtreeExtra)
-library(sjPlot)      
-library(ggeffects)   
+library(sjPlot)
+library(ggeffects)
 library(ggplot2)
 library(stringr)
 library(car)
 
-
 df_plot2_1 <- df_lat_sp %>%
   filter(is.finite(WS_L), WS_L > 0, is.finite(WS_U), WS_U > 0) %>%
   pivot_longer(
-    cols = c(WS_L, WS_U), 
-    names_to = "WS_type", 
+    cols = c(WS_L, WS_U),
+    names_to = "WS_type",
     values_to = "WS_value"
   ) %>%
   mutate(WS_type = factor(WS_type, levels = c("WS_U", "WS_L"), labels = c("Upper (WS_U)", "Lower (WS_L)")))
@@ -28,27 +29,27 @@ df_plot2_1 <- df_lat_sp %>%
 fix_L <- fixef(m_lat_L)
 fix_U <- fixef(m_lat_U)
 
-pred_L <- predict_response(m_lat_L, terms = "abs_lat",back_transform = FALSE) %>% 
-  as_tibble() %>% 
+pred_L <- predict_response(m_lat_L, terms = "abs_lat",back_transform = FALSE) %>%
+  as_tibble() %>%
   mutate(WS_type = "Lower (WS_L)")
 
-pred_U <- predict_response(m_lat_U, terms = "abs_lat",back_transform = FALSE) %>% 
-  as_tibble() %>% 
+pred_U <- predict_response(m_lat_U, terms = "abs_lat",back_transform = FALSE) %>%
+  as_tibble() %>%
   mutate(WS_type = "Upper (WS_U)")
 
 df_preds2_1 <- bind_rows(pred_L, pred_U) %>%
   rename(abs_lat = x, log10_WS = predicted)
 
 ggplot() +
-  geom_ribbon(data = df_preds2_1, aes(x = abs_lat, ymin = conf.low, ymax = conf.high, fill = WS_type), 
+  geom_ribbon(data = df_preds2_1, aes(x = abs_lat, ymin = conf.low, ymax = conf.high, fill = WS_type),
               alpha = 0.2) +
   geom_point(data = df_plot2_1, aes(x = abs_lat, y = log10(WS_value), color = WS_type, shape = Family),alpha=0.5,size=1.3
            ) +
-  geom_line(data = df_preds2_1, aes(x = abs_lat, y = log10_WS, color = WS_type), 
+  geom_line(data = df_preds2_1, aes(x = abs_lat, y = log10_WS, color = WS_type),
             size = 1.2) +
   scale_color_manual(values = c("Lower (WS_L)" = "#56B4E9", "Upper (WS_U)" = "#D55E00")) +
   scale_fill_manual(values = c("Lower (WS_L)" = "#56B4E9", "Upper (WS_U)" = "#D55E00")) +
-  scale_shape_manual(values = c(16, 17, 15, 18, 25)) + 
+  scale_shape_manual(values = c(16, 17, 15, 18, 25)) +
   labs(
     title = "Bergmann's Rule in migratry Butterflies",
     subtitle = "Points show raw data; Ribbons show 95% CI from LMM (Fixed Effects)",
@@ -65,9 +66,6 @@ ggplot() +
     axis.title = element_text(size = 12)
   )
 
-
-#Rapoport
-
 pred_pattern <- predict_response(m_pattern, terms = "prop_mean", back_transform = FALSE) %>%
   as_tibble() %>%
   rename(prop_mean = x, log10_range = predicted)
@@ -77,32 +75,31 @@ pred_mechanism <- predict_response(m_mechanism, terms = "mean_bio4", back_transf
   rename(mean_bio4 = x, log10_range = predicted)
 
 ggplot() +
-  geom_ribbon(data = pred_pattern, aes(x = prop_mean, ymin = conf.low, ymax = conf.high), 
+  geom_ribbon(data = pred_pattern, aes(x = prop_mean, ymin = conf.low, ymax = conf.high),
               fill = "#D55E00", alpha = 0.2) +
-  geom_point(data = final_df, aes(x = prop_mean, y = log10(range_km2), color = mean_bio4), 
+  geom_point(data = final_df, aes(x = prop_mean, y = log10(range_km2), color = mean_bio4),
              alpha = 0.3, size = 1) +
   scale_color_viridis_c(option = "viridis") +
-  
-  geom_line(data = pred_pattern, aes(x = prop_mean, y = log10_range), 
+
+  geom_line(data = pred_pattern, aes(x = prop_mean, y = log10_range),
             color = "#D55E00", size = 1.2) +
-  
+
   labs(
     title = "Figure 2.2: Rapoport Pattern",
     subtitle = "Relationship between range size and tropical occupancy",
     x = "Proportion of range within tropics",
     y = expression(log[10] * " Range Size (" * km^2 * ")"),
-    color = "Temp Seasonality\n(Bio4)" # 给新加的颜色图例加个好看的标题
+    color = "Temp Seasonality\n(Bio4)"
   ) +
   theme_classic()
 
-
 ggplot() +
-  geom_ribbon(data = pred_mechanism, aes(x = mean_bio4, ymin = conf.low, ymax = conf.high), 
+  geom_ribbon(data = pred_mechanism, aes(x = mean_bio4, ymin = conf.low, ymax = conf.high),
               fill = "#D55E00", alpha = 0.2) +
-  geom_point(data = final_df, aes(x = mean_bio4, y = log10(range_km2), color = prop_mean), 
+  geom_point(data = final_df, aes(x = mean_bio4, y = log10(range_km2), color = prop_mean),
              alpha = 0.3, size = 1) +
   scale_color_viridis_c(option = "viridis")+
-  geom_line(data = pred_mechanism, aes(x = mean_bio4, y = log10_range), 
+  geom_line(data = pred_mechanism, aes(x = mean_bio4, y = log10_range),
             color = "#D55E00", size = 1.2) +
   labs(
     title = "Figure 2.3: Rapoport Mechanism",
@@ -112,7 +109,6 @@ ggplot() +
   ) +
   theme_classic()
 
-#Figure 2c robustness check: does the Bio4 effect hold after controlling for phylogeny?
 mech_compare <- bind_rows(
   broom.mixed::tidy(m_mechanism_full_z, effects = "fixed", conf.int = TRUE) %>%
     mutate(model = "Full data (no phylogeny)"),
@@ -145,8 +141,6 @@ ggplot(mech_compare, aes(x = estimate, y = model, color = model)) +
   ) +
   theme_classic() +
   theme(legend.position = "none")
-
-#size vs Range
 
 df_synthesis <- final_df %>%
   inner_join(df_lat_sp %>% dplyr::select(species, WS_L, WS_U, abs_lat), by = "species") %>%
@@ -181,14 +175,13 @@ labs(
     plot.title = element_text(face = "bold")
   )
 
-#new plot 2.4
 final_df_lat_clean<-final_df_lat
 final_df_lat_clean$log_WS<-log10(final_df_lat$WS_L)
 final_df_lat_clean$log_range<-log10(final_df_lat$range_km2)
 
-m_clean <- lmer(log_range ~ abs_lat*log_WS + prop_within + season + (1 | species), 
+m_clean <- lmer(log_range ~ abs_lat*log_WS + prop_within + season + (1 | species),
                      data = final_df_lat_clean)
-m_clean_vif <- lmer(log_range ~ abs_lat+log_WS + prop_within + season + (1 | species), 
+m_clean_vif <- lmer(log_range ~ abs_lat+log_WS + prop_within + season + (1 | species),
                 data = final_df_lat_clean)
 
 predictions_clean <- ggpredict(m_clean, terms = c("log_WS", "abs_lat [0, 18.2, 40, 60]"))
@@ -201,7 +194,7 @@ vif(m_clean_vif)
 clean_plot <- plot(predictions_clean) +
   labs(
     title = "Effect of Wing Size on Range Size Across Latitudes",
-    x = "Wing Size (log10)", 
+    x = "Wing Size (log10)",
     y = "Predicted Range Size (log10 km²)",
     color = "Absolute Latitude"
   ) +
@@ -216,19 +209,17 @@ print(clean_plot)
 clean_plot <- plot(predictions_clean) +
   labs(
     title = "Effect of Wing Size on Range Size Across Latitudes",
-    x = "Wing Size (log10)", 
+    x = "Wing Size (log10)",
     y = "Predicted Range Size (log10 km²)",
     color = "Absolute Latitude",
     fill = "Absolute Latitude"
   ) +
-  # 添加 viridis 配色方案
-  scale_color_viridis_d(option = "viridis") + 
+  scale_color_viridis_d(option = "viridis") +
   scale_fill_viridis_d(option = "viridis") +
-  theme_classic() 
+  theme_classic()
 
 print(clean_plot)
 
-#Wing size x Latitude interaction, phylogeny-controlled robustness check + visualization
 interact_compare <- bind_rows(
   broom.mixed::tidy(m_interact_full_z, effects = "fixed", conf.int = TRUE) %>%
     mutate(model = "Full data (no phylogeny)"),
@@ -264,9 +255,6 @@ p_interact_compare <- ggplot(interact_compare, aes(x = estimate, y = model, colo
 
 print(p_interact_compare)
 
-# predicted wing-size effect on range size across latitude, from the phylo model
-# uses the same 4 latitude levels as the non-phylo "Figure 2.4" plot (m_clean / clean_plot above)
-# for direct comparability
 ws_mean  <- mean(log10(df_model_WS_U_lat$WS_U))
 ws_sd    <- sd(log10(df_model_WS_U_lat$WS_U))
 lat_mean <- mean(df_model_WS_U_lat$abs_lat)
@@ -315,8 +303,6 @@ write_csv(interact_compare, "output/phylo_export/figure2d_interaction_phylo_comp
 ggsave("output/phylo_export/figure2d_interaction_phylo_comparison.png", p_interact_compare, width = 8, height = 4, dpi = 200)
 ggsave("output/phylo_export/figure2d_wingsize_latitude_interaction.png", p_interact, width = 7, height = 5, dpi = 200)
 
-#phylo
-
 family_data <- df_lat_sp %>%
   mutate(species = str_replace_all(species, " ", "_")) %>%
   distinct(species, Family)
@@ -334,29 +320,28 @@ df_tree_side <- df_phylo_final %>%
   as.data.frame()
 
 df_fruit_side <- df_phylo_final %>%
-  rename(label = species, 
-         Family_Bar = Family,   
-         Range_Val = log_Range) %>% 
+  rename(label = species,
+         Family_Bar = Family,
+         Range_Val = log_Range) %>%
   dplyr::select(label, Family_Bar, Range_Val) %>%
   as.data.frame()
-
 
 p_final <- ggtree(tree_final, layout = "fan", open.angle = 15, linewidth = 0.3) %<+% df_tree_side
 
 p_final <- p_final + geom_tree(aes(color = Family), linewidth = 0.6)
 
-p_final <- p_final + 
+p_final <- p_final +
   geom_fruit(
     data = df_fruit_side,
     geom = geom_bar,
-    mapping = aes(y = label, x = Range_Val, fill = Family_Bar), # 使用新列名
+    mapping = aes(y = label, x = Range_Val, fill = Family_Bar),
     stat = "identity",
-    orientation = "y",      
-    pwidth = 0.3,           
-    offset = 0.1,           
+    orientation = "y",
+    pwidth = 0.3,
+    offset = 0.1,
     axis.params = list(
-      axis = "x",          
-      text.size = 2,       
+      axis = "x",
+      text.size = 2,
       title = "log10 Range",
       title.size = 3
     )
@@ -374,17 +359,14 @@ p_final <- p_final +
 
 print(p_final)
 
-
-
-##other related plots
 model_fixef <- m_rapoport_with_size_U %>%
   gather_draws(`b_.*`, regex = TRUE) %>%
-  mutate(.variable = str_remove(.variable, "b_")) %>% 
-  filter(.variable != "Intercept") 
+  mutate(.variable = str_remove(.variable, "b_")) %>%
+  filter(.variable != "Intercept")
 
 p_3_2 <- ggplot(model_fixef, aes(y = .variable, x = .value)) +
-  stat_pointinterval(.width = c(.66, .95), color = "steelblue") + 
-  geom_vline(xintercept = 0, linetype = "dashed", color = "red") + 
+  stat_pointinterval(.width = c(.66, .95), color = "steelblue") +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
   labs(
     title = "Figure 3.2: Standardized Coefficients for Range Size",
     subtitle = "Points show posterior mean; bars show 66% and 95% CIs",
@@ -395,10 +377,8 @@ p_3_2 <- ggplot(model_fixef, aes(y = .variable, x = .value)) +
 
 p_3_2
 
-
-
-hyp <- as_tibble(VarCorr(m_rapoport_with_size_U)$species_phylo$sd[,1]^2) 
-res <- as_tibble(VarCorr(m_rapoport_with_size_U)$residual$sd[,1]^2)    
+hyp <- as_tibble(VarCorr(m_rapoport_with_size_U)$species_phylo$sd[,1]^2)
+res <- as_tibble(VarCorr(m_rapoport_with_size_U)$residual$sd[,1]^2)
 
 df_var <- data.frame(
   Source = c("Phylogeny", "Residuals"),
@@ -408,8 +388,8 @@ df_var <- data.frame(
 
 p_3_3 <- ggplot(df_var, aes(x = "", y = Percentage, fill = Source)) +
   geom_bar(stat = "identity", width = 0.5) +
-  coord_polar("y", start = 0) + 
-  geom_text(aes(label = paste0(round(Percentage, 1), "%")), 
+  coord_polar("y", start = 0) +
+  geom_text(aes(label = paste0(round(Percentage, 1), "%")),
             position = position_stack(vjust = 0.5), color = "white") +
   scale_fill_manual(values = c("Phylogeny" = "#2c7bb6", "Residuals" = "#d7191c")) +
   theme_void() +
@@ -418,12 +398,6 @@ p_3_3 <- ggplot(df_var, aes(x = "", y = Percentage, fill = Source)) +
 
 p_3_3
 
-
-#our result is interesting
-
-
-
-#p3-1 new
 df_plot_final <- df_phylo_final %>%
   rename(label = species) %>%
   mutate(Range_Val = log10(mean_range)) %>%
@@ -442,13 +416,13 @@ df_for_tree_nodes <- data.frame(node = as.integer(names(anc_res)), Range_Color_N
 df_for_fruit_ring <- df_plot_final %>%
   filter(label %in% tree_pruned$tip.label) %>%
   dplyr::select(label, Family) %>%
-  rename(Family_Identity_Ring = Family) %>% 
+  rename(Family_Identity_Ring = Family) %>%
   as.data.frame()
 
 df_for_fruit_text <- df_for_fruit_ring %>%
   group_by(Family_Identity_Ring) %>%
   summarise(label = label[ceiling(n()/2)], .groups = "drop") %>%
-  rename(Family_Name_Text = Family_Identity_Ring) 
+  rename(Family_Name_Text = Family_Identity_Ring)
 
 p_iter <- ggtree(tree_pruned, layout = "fan", open.angle = 15, linewidth = 0.5)
 
@@ -456,57 +430,51 @@ p_iter$data <- p_iter$data %>%
   left_join(df_for_tree_branches, by = "label") %>%
   left_join(df_for_tree_nodes, by = "node") %>%
   mutate(Final_Evolutionary_Value = coalesce(Range_Color_Branch, Range_Color_Node))
-# 1. Base Tree (Updated legend title)
-p_iter <- p_iter + 
-  aes(color = Final_Evolutionary_Value) + 
+p_iter <- p_iter +
+  aes(color = Final_Evolutionary_Value) +
   geom_tree(linewidth = 0.8) +
   scale_color_viridis_c(option = "viridis", name = "log10 Range Size")
 
-# 2. The Species Trait Ring (Legend removed)
 p_iter <- p_iter +
-  new_scale_fill() + 
+  new_scale_fill() +
   geom_fruit(
     data = df_plot_final,
     geom = geom_tile,
     mapping = aes(y = label, fill = Range_Val),
-    width = 10,       
-    offset = 0.05,    
+    width = 10,
+    offset = 0.05,
     linewidth = 0
   ) +
-  scale_fill_viridis_c(option = "viridis", guide = "none") # Hides the duplicate legend!
+  scale_fill_viridis_c(option = "viridis", guide = "none")
 
-# 3. The Family Ring (Unchanged)
 p_iter <- p_iter +
-  new_scale_fill() + 
+  new_scale_fill() +
   geom_fruit(
     data = df_for_fruit_ring,
     geom = geom_tile,
     mapping = aes(y = label, fill = Family_Identity_Ring),
-    width = 5,        
-    offset = 0.08,    
+    width = 5,
+    offset = 0.08,
     linewidth = 0
   ) +
-  scale_fill_brewer(palette = "Set3",  guide = "none") 
+  scale_fill_brewer(palette = "Set3",  guide = "none")
 
-# 4. The Family Text Labels (Pushed further outward)
 p_iter <- p_iter +
   geom_fruit(
     data = df_for_fruit_text,
     geom = geom_text,
     mapping = aes(
-      y = label, 
+      y = label,
       label = Family_Name_Text,
-      # Here is the magic math that curves it and keeps it right-side up!
-      angle = ifelse(angle > 180, angle + 90, angle - 90) 
+      angle = ifelse(angle > 180, angle + 90, angle - 90)
     ),
-    offset = 0.65,    # You may need to tweak this slightly (e.g., 0.2 or 0.3)
+    offset = 0.65,
     size = 4.5,
     fontface = "bold",
-    hjust = 0.5,      # <-- Changed back to 0.5 so the word is centered over its group
+    hjust = 0.5,
     check_overlap = TRUE
   )
 
-# 5. Theme and Titles
 p_iter <- p_iter +
   theme(
     legend.position = "right",
@@ -516,28 +484,23 @@ p_iter <- p_iter +
 
 print(p_iter)
 
-
-
-######## try merge a histogram
 library(patchwork)
-# We add this to your existing p_iter. 
-# Adjust the first number in xlim (e.g., -50) to make the root longer or shorter.
-p_iter <- p_iter + 
-  scale_x_continuous(expand = expansion(mult = c(0.2, 0.1))) + # Adds padding
-  geom_rootedge(rootedge = 75) # Physically draws the root line if your tree object has one
+p_iter <- p_iter +
+  scale_x_continuous(expand = expansion(mult = c(0.2, 0.1))) +
+  geom_rootedge(rootedge = 75)
 
 p_hist <- ggplot(df_plot_final, aes(x = Range_Val)) +
-  geom_histogram(aes(fill = after_stat(x)), 
-                 bins = 30, 
-                 color = "white", 
+  geom_histogram(aes(fill = after_stat(x)),
+                 bins = 30,
+                 color = "white",
                  show.legend = FALSE) +
-  scale_fill_viridis_c(option = "plasma") + 
-  
-  labs(x = "log(Distribution Range)", y = "Density") + 
-  
+  scale_fill_viridis_c(option = "plasma") +
+
+  labs(x = "log(Distribution Range)", y = "Density") +
+
   theme_minimal(base_size = 10) +
   theme(
-    panel.background = element_blank(), 
+    panel.background = element_blank(),
     plot.background = element_blank(),
     panel.grid.major = element_blank(),
     panel.grid.minor = element_blank(),
@@ -545,18 +508,14 @@ p_hist <- ggplot(df_plot_final, aes(x = Range_Val)) +
     axis.text = element_text(size = 8, face = "bold")
   )
 
-# This "inserts" the histogram into the layout. 
-final_plot <- p_iter + 
+final_plot <- p_iter +
   inset_element(
-    p_hist, 
-    left = 0.32,    
-    bottom = 0.35, 
-    right = 0.54,  
+    p_hist,
+    left = 0.32,
+    bottom = 0.35,
+    right = 0.54,
     top = 0.58,
     align_to = 'full'
   )
 
-# Display the result
 print(final_plot)
-
-
