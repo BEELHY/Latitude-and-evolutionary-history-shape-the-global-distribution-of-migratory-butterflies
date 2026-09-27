@@ -8,22 +8,22 @@ or files written by earlier scripts into `output/`. Run everything from the proj
 
 | Script | Purpose | Main output |
 |---|---|---|
-| 01_range_tropics.R | Range size vs tropicality; phylogenetic models | (session objects) |
-| 02_wingspan_traits.R | Join wingspan and range | output/trait_range.csv |
-| 03_wingspan_latitude.R | Wingspan vs latitude; interaction models | output/df_lat_sp.csv |
-| 04_phylo_bpmm.R | Climate-baseline Bayesian phylogenetic mixed models (H²) | (session objects) |
-| 05_h2_exact_match.R | H² sensitivity, exact phylogeny matches only | output/h2_sensitivity/ |
-| 06_attrition_tables.R | Sample attrition (Tables S1–S2) | output/TableS1_attrition.csv, output/TableS2_nested.csv |
-| 07_hemisphere_sensitivity.R | Northern vs southern hemisphere sensitivity | console |
-| 08_hpc_run.sh | Spatial richness GAM on HPC (calls 08_hpc_install.R, 08_richness_gam_hpc.R) | output/BAM/output/ |
-| 09_richness_gam_figures.R | GAM diagnostic figures | output/BAM/figures/ |
-| 10_nri_nti_data.R | NRI/NTI per 1° cell and model data | output/phylo_export/ |
-| 11_richness_gam_linear.R | Linear-covariate GAMs with spatial smooth | output/phylo_export/ |
-| 12_forest_data.R | Forest plot data, built-up reference | output/phylo_export/ |
-| 13_region_hotspots.R | Hotspot metrics by region | output/region_comparison/ |
-| 14_realm_hotspots.R | Hotspot metrics by zoogeographic realm | output/region_comparison/ |
-| 15_figure2_panels.R, 16_figure2_compose.py | Figure 2 | output/Manuscript/reproducibility_code/ |
-| 17_figure3_panels.R, 18_figure3_compose.py | Figure 3 | output/Manuscript/reproducibility_code/ |
+| 01_range_tropics.R | Range size vs tropicality; phylogenetic models | 
+| 02_wingspan_traits.R | Join wingspan and range |
+| 03_wingspan_latitude.R | Wingspan vs latitude; interaction models | 
+| 04_phylo_bpmm.R | Climate-baseline Bayesian phylogenetic mixed models (H²) | 
+| 05_h2_exact_match.R | H² sensitivity, exact phylogeny matches only |
+| 06_attrition_tables.R | Sample attrition (Tables S1–S2) | 
+| 07_hemisphere_sensitivity.R | Northern vs southern hemisphere sensitivity | 
+| 08_hpc_run.sh | Spatial richness GAM on HPC (calls 08_hpc_install.R, 08_richness_gam_hpc.R) | 
+| 09_richness_gam_figures.R | GAM diagnostic figures | 
+| 10_nri_nti_data.R | NRI/NTI per 1° cell and model data | 
+| 11_richness_gam_linear.R | Linear-covariate GAMs with spatial smooth | 
+| 12_forest_data.R | Forest plot data, built-up reference | 
+| 13_region_hotspots.R | Hotspot metrics by region | 
+| 14_realm_hotspots.R | Hotspot metrics by zoogeographic realm | 
+| 15_figure2_panels.R, 16_figure2_compose.py | Figure 2 | 
+| 17_figure3_panels.R, 18_figure3_compose.py | Figure 3 | 
 
 - 01–04 run in one R session, in order (02–04 reuse objects created by 01).
 - 08 needs a large-memory node (see SBATCH header); copy `output/BAM/output/` back before running 09.
