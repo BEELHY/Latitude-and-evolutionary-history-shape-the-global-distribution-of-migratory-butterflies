@@ -1,10 +1,12 @@
 # Build richness grid data.
 
 library(ranger)
+# Run on HPC
 
 path <- "data/climate/landuse.tif"
 landuse_ras <- rast(path)
 summary(landuse_ras)
+# Land-cover classes
 lc_mapping <- c(
   "0"   = "No_Data",
   "111" = "Closed_Forest_Evergreen_Needle",
@@ -34,6 +36,7 @@ lc_mapping <- c(
 env_cont <- c(elev_ras, bio15_ras, bio4_ras)
 names(env_cont) <- c("elevation", "bio15", "bio4")
 names(landuse_ras) <- "landuse"
+# Extract pixel data
 extract_pixel_data_all <- function(f, sp_name, season_name, env_cont, landuse_ras) {
   tryCatch({
     r <- rast(f)
@@ -71,6 +74,7 @@ extract_pixel_data_all <- function(f, sp_name, season_name, env_cont, landuse_ra
 }
 
 pixel_level_env_data <- read_csv("output/pixel_level_env_data.csv")
+# Land-use category
 pixel_level_env_data_clean <- pixel_level_env_data %>%
   filter(!landuse %in% c("No_Data", "Open_Sea", "Permanent_Water")) %>%
   mutate(landuse_grouped = case_when(
@@ -87,10 +91,14 @@ table(pixel_level_env_data_clean$landuse_grouped)
 
 present_data <- pixel_level_env_data_clean %>% mutate(occ = 1)
 
+# Pseudo-absences
+
 bg_mask <- test_mask <- rast("output/masks/landuse_mask_no_water.tif")
 
+# Sample background points 1:1
 n_samples <- nrow(present_data)
 
+# Candidate background pool
 bg_pool <- spatSample(bg_mask, size = 20000000, method = "random", na.rm = TRUE, xy = TRUE) %>% as_tibble()
 gc()
 message("📡 正在生成背景候选池...")
@@ -104,6 +112,7 @@ get_specific_absent <- function(sp, se, p_data, pool) {
     mutate(x = round(x, 5), y = round(y, 5)) %>%
     distinct()
 
+  # Match precomputed coordinates
   specific_absent <- pool %>%
     anti_join(pres_coords, by = c("xr" = "x", "yr" = "y")) %>%
     slice_sample(n = nrow(pres_coords)) %>%
@@ -112,6 +121,7 @@ get_specific_absent <- function(sp, se, p_data, pool) {
 
   return(specific_absent)
 }
+# Sample and extract covariates
 message("🧬 正在生成专属不在点...")
 all_comb_final <- present_data %>% distinct(species, season)
 
@@ -121,16 +131,19 @@ absent_final_raw <- map2_dfr(
   ~get_specific_absent(.x, .y, present_data, bg_pool)
 )
 
+# Extract environment
 message("🔍 正在点对点提取环境因子...")
 env_values_final <- terra::extract(env_cont, absent_final_raw[, c("x", "y")])
 
+# Format presences
 present_final <- present_data %>%
   mutate(occ = 1) %>%
   dplyr::select(x, y, elevation, bio15, bio4,
                 landuse = landuse_grouped, species, season, occ)
 
+# Format absences
 absent_final_ready <- bind_cols(absent_final_raw, env_values_final) %>%
-  dplyr::select(-any_of("ID")) %>%
+  dplyr::select(-any_of("ID")) %>%  # Drop ID column
   mutate(
     landuse_grouped = case_when(
       landuse %in% c(111, 112, 113, 114, 115, 116) ~ "Closed_Forest",
@@ -147,5 +160,6 @@ absent_final_ready <- bind_cols(absent_final_raw, env_values_final) %>%
 
 full_model_data <- bind_rows(present_final, absent_final_ready) %>%
   mutate(across(c(elevation, bio15, bio4), ~as.numeric(scale(.))))
+# Save as RDS
 dir.create("output/final", recursive = TRUE, showWarnings = FALSE)
 saveRDS(full_model_data, "output/final/full_model_data_88m.rds")

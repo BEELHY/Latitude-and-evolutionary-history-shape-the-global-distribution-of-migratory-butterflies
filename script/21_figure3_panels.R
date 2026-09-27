@@ -21,6 +21,7 @@ suppressPackageStartupMessages({
 out_dir <- "output/Manuscript/reproducibility_code"
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
+# Load data
 trait_range <- read_csv("output/trait_range.csv", show_col_types = FALSE)
 df_lat_sp   <- readRDS("output/checkpoints/df_lat_sp_test.rds") %>%
   mutate(species = str_replace_all(species, " ", "_"))
@@ -42,6 +43,7 @@ df_sp_level <- final_df %>%
   inner_join(df_lat_sp %>% dplyr::select(species, abs_lat), by = "species") %>%
   group_by(species) %>%
   summarise(mean_range = mean(range_km2), Family = first(Family), .groups = "drop") %>%
+  # Fill missing families from genus
   mutate(Family = case_when(
     is.na(Family) & str_detect(species, "^Acraea_|^Cirrochroa_|^Heliconius_") ~ "Nymphalidae",
     is.na(Family) & str_detect(species, "^Pontia_") ~ "Pieridae",
@@ -72,6 +74,7 @@ df_for_fruit_ring <- df_plot_final %>%
   dplyr::select(label, Family) %>%
   rename(Family_Identity_Ring = Family) %>% as.data.frame()
 
+# Fan tree
 BASE_SIZE <- 12
 
 p_iter <- ggtree(tree_pruned, layout = "fan", open.angle = 15, linewidth = 0.5)
@@ -99,10 +102,12 @@ p_iter <- p_iter +
              width = 5, offset = 0.08, linewidth = 0) +
   scale_fill_brewer(palette = "Set3", guide = "none")
 
+# Root edge opens centre
 p_iter <- p_iter +
   scale_x_continuous(expand = expansion(mult = c(0.2, 0.1))) +
   geom_rootedge(rootedge = 75)
 
+# No labels or photos here
 p_iter <- p_iter +
   theme(
     legend.position = "right",
@@ -114,6 +119,7 @@ p_iter <- p_iter +
     plot.margin = margin(4, 4, 4, 4)
   )
 
+# Export legend separately
 g_full <- ggplotGrob(p_iter)
 legend_grob <- g_full$grobs[[grep("guide-box", g_full$layout$name)[1]]]
 png(file.path(out_dir, "Figure3_legend.png"), width = 4, height = 4,
@@ -122,6 +128,7 @@ grid::grid.draw(legend_grob)
 dev.off()
 p_iter <- p_iter + theme(legend.position = "none")
 
+# Histogram, outlier excluded
 p_hist <- ggplot(df_plot_final %>% dplyr::filter(Range_Val > 5.5), aes(x = Range_Val)) +
   geom_histogram(aes(fill = after_stat(x)), bins = 30, color = "white", show.legend = FALSE) +
   scale_fill_viridis_c(option = "plasma") +
@@ -133,16 +140,18 @@ p_hist <- ggplot(df_plot_final %>% dplyr::filter(Range_Val > 5.5), aes(x = Range
         axis.title = element_text(size = BASE_SIZE, face = "bold"),
         axis.text = element_text(size = BASE_SIZE, face = "bold"))
 
+# Export tree and histogram
 IMG_PX <- 2200
 ggsave(file.path(out_dir, "Figure3_base.png"), p_iter,
        width = IMG_PX / 300, height = IMG_PX / 300, dpi = 300, bg = "white")
 ggsave(file.path(out_dir, "Figure3_hist.png"), p_hist,
-       width = 1.95, height = 1.6,
+       width = 1.95, height = 1.6,  # Native size keeps 12pt
        dpi = 300, bg = "transparent")
 cat(sprintf("Saved: %s and Figure3_hist.png\n", file.path(out_dir, "Figure3_base.png")))
 cat("Next: run script/22_figure3_compose.py to overlay family labels + butterfly photos\n")
 cat("      at positions/angles/sizes read directly from output/Manuscript/figure 3.pdf.\n")
 
+# Methods text (C24)
 cat("\n=== Methods paragraph to add (addresses reviewer comment C24) ===\n")
 cat("Ancestral range sizes at internal nodes (Fig. 3) were estimated by\n")
 cat("maximum-likelihood ancestral state reconstruction under a Brownian-\n")

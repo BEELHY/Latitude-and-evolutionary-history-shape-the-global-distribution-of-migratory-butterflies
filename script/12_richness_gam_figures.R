@@ -1,32 +1,41 @@
 # Richness GAM diagnostic figures.
 
-library(mgcv)
-library(ggplot2)
-library(gratia)
-library(patchwork)
-library(dplyr)
+# Libraries
+library(mgcv)  # GAM fitting
+library(ggplot2)  # Plotting
+library(gratia)  # GAM smooth extraction
+library(patchwork)  # Panel layout
+library(dplyr)  # Data wrangling
 
 cat("\n--- [1/4] 环境就绪，正在加载模型与数据... ---\n")
 
+# Load saved model
 model_final <- readRDS("/Users/hlii0385/Desktop/Phd_Haiyu_LI/Rapoport-s-rule-and-Bergmann-s-rule-of-Migratory-butterflies/output/BAM/output/butterfly_bam_model.rds")
 
+# Load data, land-use factor
 file_path <- "/Users/hlii0385/Desktop/Phd_Haiyu_LI/Rapoport-s-rule-and-Bergmann-s-rule-of-Migratory-butterflies/output/BAM/output/cleaned_data_for_SAR.csv"
 df_aggressive <- read.csv(file_path)
 df_aggressive$Landuse <- factor(df_aggressive$Landuse)
 df_aggressive$Landuse <- relevel(df_aggressive$Landuse, ref = "cropland")
 
+# Load residual data
 map_data <- read.csv("/Users/hlii0385/Desktop/Phd_Haiyu_LI/Rapoport-s-rule-and-Bergmann-s-rule-of-Migratory-butterflies/output/BAM/output/spatial_residuals_map_data.csv")
 
+# Load Moran's I draws
 boot_data <- read.csv("/Users/hlii0385/Desktop/Phd_Haiyu_LI/Rapoport-s-rule-and-Bergmann-s-rule-of-Migratory-butterflies/output/BAM/output/moran_bootstrap_distribution.csv")
 
 cat("✅ 模型与数据加载成功！\n")
 
+# Main figure: partial effects
 cat("\n--- [2/4] 正在生成 Main Figure (聚光灯截距平移图)... ---\n")
 
+# Smooth terms
 get_smooth_curve <- function(mod, term_name, var_name) {
   dat <- smooth_estimates(mod, select = term_name)
+  # Handle column names
   x_val <- if (".value" %in% names(dat)) dat$.value else dat[[var_name]]
   y_val <- if (".estimate" %in% names(dat)) dat$.estimate else dat$partial
+  # Rescale x to 0-1
   x_scaled <- (x_val - min(x_val)) / (max(x_val) - min(x_val))
   data.frame(Variable = var_name, X_Relative = x_scaled, Effect = y_val)
 }
@@ -35,26 +44,32 @@ curve_bio4  <- get_smooth_curve(model_final, "s(Bio_4)", "Bio_4")
 curve_bio15 <- get_smooth_curve(model_final, "s(Bio_15)", "Bio_15")
 curve_elev  <- get_smooth_curve(model_final, "s(Elevation)", "Elevation")
 
+# Linear HII term
 hii_seq <- seq(min(df_aggressive$HII, na.rm = TRUE),
                max(df_aggressive$HII, na.rm = TRUE), length.out = 100)
 
+# Prediction data
 pred_df_hii <- df_aggressive[1:100, ]
 pred_df_hii$HII <- hii_seq
 
+# Term-wise partial effects
 hii_terms <- predict(model_final, newdata = pred_df_hii, type = "terms")
 
 curve_hii <- data.frame(
   Variable = "HII",
-  X_Relative = seq(0, 1, length.out = 100),
-  Effect = hii_terms[, "HII"]
+  X_Relative = seq(0, 1, length.out = 100),  # Relative gradient 0-1
+  Effect = hii_terms[, "HII"]  # HII column
 )
 
+# Combine curves
 all_curves <- bind_rows(curve_bio4, curve_bio15, curve_elev, curve_hii)
 
+# Land-use term
 lu_levels <- levels(df_aggressive$Landuse)
 pred_df_lu <- df_aggressive[1:length(lu_levels), ]
 pred_df_lu$Landuse <- factor(lu_levels, levels = lu_levels)
 
+# Land-use partial effects
 lu_terms <- predict(model_final, newdata = pred_df_lu, type = "terms")
 
 landuse_eff <- data.frame(
@@ -62,27 +77,33 @@ landuse_eff <- data.frame(
   Shift   = lu_terms[, "Landuse"]
 )
 
+# Cropland as zero
 ref_shift <- landuse_eff$Shift[landuse_eff$Landuse == "cropland"]
 landuse_eff$Shift <- landuse_eff$Shift - ref_shift
 
+# Shift curves by land use
 plot_data_shifted <- cross_join(all_curves, landuse_eff) |>
   mutate(
     Shifted_Effect = Effect + Shift,
 
+    # Highlight urban
     Target_Group = "built",
 
     Is_Target = (Landuse == Target_Group)
   )
 
+# Main figure
 main_figure <- ggplot() +
   geom_hline(yintercept = 0, linetype = "dashed", color = "gray50", linewidth = 0.8) +
 
+  # Background land uses
   geom_line(
     data = plot_data_shifted |> filter(!Is_Target),
     aes(x = X_Relative, y = Shifted_Effect, group = interaction(Variable, Landuse)),
     color = "grey60", alpha = 0.25, linewidth = 0.8
   ) +
 
+  # Highlighted urban curves
   geom_line(
     data = plot_data_shifted |> filter(Is_Target),
     aes(x = X_Relative, y = Shifted_Effect, color = Variable),
@@ -106,11 +127,14 @@ main_figure <- ggplot() +
     x = "Relative Gradient (0 to 1)",
     y = "Partial Effect on Richness (Intercept Shifted)"
   )
+# Save main figure
 ggsave("/Users/hlii0385/Desktop/Phd_Haiyu_LI/Rapoport-s-rule-and-Bergmann-s-rule-of-Migratory-butterflies/Figure_1_Main_Spotlight.pdf", main_figure, width = 10, height = 7, dpi = 300)
 ggsave("/Users/hlii0385/Desktop/Phd_Haiyu_LI/Rapoport-s-rule-and-Bergmann-s-rule-of-Migratory-butterflies/Figure_1_Main_Spotlight.png", main_figure, width = 10, height = 7, dpi = 300, bg = "white")
 
+# Supplementary figures
 cat("\n--- [3/4] 正在生成 Support Figures (模型诊断与稳健性)... ---\n")
 
+# Residual map
 sf1_map <- ggplot(map_data, aes(x = lon, y = lat, color = res)) +
   geom_point(alpha = 0.6, size = 0.5) +
   scale_color_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b", midpoint = 0,
@@ -124,6 +148,7 @@ sf1_map <- ggplot(map_data, aes(x = lon, y = lat, color = res)) +
 
 ggsave("/Users/hlii0385/Desktop/Phd_Haiyu_LI/Rapoport-s-rule-and-Bergmann-s-rule-of-Migratory-butterflies/Support_Figure_1_Residual_Map.png", sf1_map, width = 12, height = 6, dpi = 300, bg = "white")
 
+# Moran's I distribution
 mean_I <- mean(boot_data$Moran_I)
 ci_lower <- quantile(boot_data$Moran_I, 0.025)
 ci_upper <- quantile(boot_data$Moran_I, 0.975)
@@ -144,6 +169,7 @@ sf2_moran <- ggplot(boot_data, aes(x = Moran_I)) +
 
 ggsave("/Users/hlii0385/Desktop/Phd_Haiyu_LI/Rapoport-s-rule-and-Bergmann-s-rule-of-Migratory-butterflies/Support_Figure_2_Moran_Distribution.png", sf2_moran, width = 8, height = 6, dpi = 300, bg = "white")
 
+# Spatial smooth surface
 sf3_spatial_smooth <- draw(model_final, select = "s(lon,lat)") +
   theme_minimal(base_size = 14) +
   scale_fill_viridis_c(option = "mako", name = "Spatial\nEffect") +

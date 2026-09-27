@@ -26,6 +26,7 @@ moran_report <- function(mod, label) {
   cat(sprintf("[%s] Moran's I = %.3f, p %s\n", label, unname(mt$estimate["Moran I statistic"]), p_str))
 }
 
+# Main: global richness
 cat("\n=== MAIN: A_lin_sm, global richness (Richness_full) ===\n")
 m_A <- fit_gam(
   Richness_full ~ Bio_4 + Bio_15 + Elevation + HII + Landuse + s(lon1, lat1, k = SPATIAL_K),
@@ -33,6 +34,7 @@ m_A <- fit_gam(
 print(summary(m_A))
 moran_report(m_A, "A_lin_sm (global, main)")
 
+# Appendix: 247 species, NRI/NTI
 cat("\n=== SUPP: B_lin_sm, 247-sp subset, no NRI/NTI ===\n")
 m_B <- fit_gam(
   Richness_247 ~ Bio_4 + Bio_15 + Elevation + HII + Landuse + s(lon1, lat1, k = SPATIAL_K),

@@ -15,17 +15,20 @@ counts <- as.matrix(raw[, rich_cols])
 rownames(counts) <- raw$Region
 storage.mode(counts) <- "double"
 
+# Check totals match
 stopifnot(all(abs(rowSums(counts) - raw$Total_Migratory_Cells) < 1e-6))
 
+# Global hotspot cutoff (top 3%)
 global_counts <- colSums(counts)
 global_total  <- sum(global_counts)
-tail_share    <- rev(cumsum(rev(global_counts))) / global_total
+tail_share    <- rev(cumsum(rev(global_counts))) / global_total  # P(richness >= S)
 
 S_star <- S_vals[which(tail_share <= 0.03)[1]]
 cat(sprintf("Occupied cells worldwide: %s\n", format(global_total, big.mark = ",")))
 cat(sprintf("Hotspot cutoff S* = %d  (top %.2f%% of occupied cells)\n\n",
             S_star, 100 * tail_share[which(S_vals == S_star)]))
 
+# Per-region metrics
 quantile_from_counts <- function(cnt, q) {
   S_vals[which(cumsum(cnt) >= sum(cnt) * q)[1]]
 }
@@ -46,13 +49,16 @@ metrics <- lapply(seq_len(nrow(counts)), function(i) {
     P95_richness      = quantile_from_counts(cnt, 0.95),
     Max_richness      = max(S_vals[cnt > 0]),
     Hotspot_cells     = hs,
+    # Share of world hotspots
     Hotspot_share     = 100 * hs / global_hotspot,
     stringsAsFactors  = FALSE
   )
 }) %>% bind_rows() %>% arrange(desc(Hotspot_share))
 
+# Over-representation ratio
 metrics$Hotspot_over_rep <- metrics$Hotspot_share / metrics$Pct_world_occupied
 
+# Flag very small regions
 MIN_CELLS <- 1000
 metrics$Flag <- ifelse(metrics$Occupied_cells < MIN_CELLS, "small-sample*", "")
 
@@ -63,6 +69,7 @@ metrics_out <- metrics %>%
 write.csv(metrics_out, "output/region_comparison/Table_S_Region_Hotspot_Metrics.csv", row.names = FALSE)
 print(metrics_out, row.names = FALSE)
 
+# Figure: global shares
 shares <- metrics %>%
   select(Region, Pct_world_occupied, Hotspot_share) %>%
   pivot_longer(-Region, names_to = "metric", values_to = "pct") %>%
@@ -96,6 +103,7 @@ ggsave("output/region_comparison/Figure_S_Region_Global_Shares.pdf", p_share,
 ggsave("output/region_comparison/Figure_S_Region_Global_Shares.png", p_share,
        width = 6.4, height = 5.0, dpi = 400)
 
+# Exceedance curves
 exceed <- lapply(seq_len(nrow(counts)), function(i) {
   cnt <- counts[i, ]
   data.frame(
@@ -106,6 +114,7 @@ exceed <- lapply(seq_len(nrow(counts)), function(i) {
   )
 }) %>% bind_rows() %>% filter(P > 0)
 
+# Highlighted regions
 top_regions <- c(head(metrics$Region[metrics$Flag == ""], 6), "North American")
 top_regions <- unique(top_regions)
 
@@ -115,6 +124,7 @@ exceed <- exceed %>%
     highlight = Region %in% top_regions
   )
 
+# Colourblind-safe palette
 pal <- c("#E69F00", "#56B4E9", "#009E73", "#D55E00",
          "#0072B2", "#CC79A7", "#000000")[seq_along(top_regions)]
 names(pal) <- top_regions
@@ -132,6 +142,7 @@ p <- ggplot() +
   annotate("text", x = S_star + 0.8, y = 0.62,
            label = sprintf("hotspot threshold\nS* = %d (top 3%% worldwide)", S_star),
            hjust = 0, size = 2.9, colour = "grey25", lineheight = 0.95) +
+  # Explicit axis labels
   scale_y_log10(breaks = c(1, 0.1, 0.01, 1e-3, 1e-4, 1e-5),
                 labels = c("100%", "10%", "1%", "0.1%", "0.01%", "0.001%")) +
   scale_x_continuous(breaks = c(1, seq(8, 48, 8)),
@@ -140,6 +151,7 @@ p <- ggplot() +
                       name = NULL) +
   labs(
     x = expression("Migratory species richness threshold, " * italic(S)),
+    # Plotmath for >= sign
     y = expression(paste("Occupied cells with richness ", phantom() >= phantom(),
                          italic(S), " (% of region's occupied cells)"))
   ) +

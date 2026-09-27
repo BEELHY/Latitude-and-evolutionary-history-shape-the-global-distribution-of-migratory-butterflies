@@ -17,6 +17,7 @@ suppressPackageStartupMessages({
 out_dir <- "output/Manuscript/reproducibility_code"
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
+# Load data
 trait_range  <- read_csv("output/trait_range.csv", show_col_types = FALSE)
 mean_bio4_ss <- read_csv("output/mean_bio4_per_species_season.csv", show_col_types = FALSE)
 df_lat_sp    <- readRDS("output/checkpoints/df_lat_sp_test.rds") %>%
@@ -35,7 +36,7 @@ final_df_lat <- final_df %>%
   left_join(df_lat_sp %>% dplyr::select(species, abs_lat), by = "species")
 
 BASE_SIZE <- 12
-LEGEND_POS <- c(0.82, 0.86)
+LEGEND_POS <- c(0.82, 0.86)  # Top-right legend
 theme_fig2 <- theme_classic(base_size = BASE_SIZE) +
   theme(
     plot.title = element_text(face = "bold", size = BASE_SIZE),
@@ -46,6 +47,7 @@ theme_fig2 <- theme_classic(base_size = BASE_SIZE) +
     legend.position = "inside", legend.position.inside = LEGEND_POS
   )
 
+# Panel a
 m_pattern <- lmer(log10(range_km2) ~ prop_mean + prop_within + season + (1 | species),
                    data = final_df_lat)
 
@@ -58,6 +60,7 @@ p2a <- ggplot() +
   geom_point(data = final_df, aes(x = prop_mean, y = log10(range_km2), color = mean_bio4),
              alpha = 0.3, size = 1) +
   scale_color_viridis_c(option = "viridis") +
+  # Blank margin for legend
   scale_x_continuous(expand = expansion(mult = c(0.02, 0.20))) +
   geom_line(data = pred_pattern, aes(x = prop_mean, y = log10_range),
             color = "#D55E00", linewidth = 1.2) +
@@ -65,9 +68,11 @@ p2a <- ggplot() +
        y = expression(log[10] * " Range size (" * km^2 * ")"),
        color = "Temp.\nseasonality\n(BIO4)") +
   theme_fig2 +
+  # Anchor legend top-left
   theme(legend.position.inside = c(0.85, 0.97),
         legend.justification.inside = c(0, 1))
 
+# Panel b
 m_lat_L <- lmer(log10(WS_L) ~ abs_lat + (1 | Family),
                  data = df_lat_sp %>% dplyr::filter(is.finite(WS_L), WS_L > 0))
 m_lat_U <- lmer(log10(WS_U) ~ abs_lat + (1 | Family),
@@ -96,6 +101,7 @@ p2b <- ggplot() +
        color = "Wingspan", fill = "Wingspan") +
   theme_fig2
 
+# Panel c
 m_interact <- lmer(log10(range_km2) ~ abs_lat * log10(WS_L) + prop_within + season + (1 | species),
                     data = final_df_lat)
 
@@ -117,8 +123,10 @@ p2c <- ggplot(pred_c, aes(x = WS_L, y = fit, color = lat_group, fill = lat_group
        color = "Absolute\nlatitude", fill = "Absolute\nlatitude") +
   theme_fig2
 
+# Panel d: main GAM
 forest_df <- read_csv("output/phylo_export/main_model_forest_data_built_ref.csv", show_col_types = FALSE) %>%
   mutate(variable = recode(variable, "Bio_4" = "Temperature\nseasonality", "Bio_15" = "Precipitation\nseasonality"),
+         # Row order, top to bottom
          variable = factor(variable, levels = c("Trees", "Shrubs", "Grassland", "Cropland",
                                                  "HII", "Precipitation\nseasonality",
                                                  "Temperature\nseasonality", "Elevation")))
@@ -132,6 +140,7 @@ p2d <- ggplot(forest_df, aes(x = estimate, y = variable, color = type, shape = s
   labs(x = "Coefficient estimate (95% CI)", y = NULL, color = NULL) +
   theme_fig2
 
+# Export panels separately
 panel_dir <- file.path(out_dir, "panels")
 dir.create(panel_dir, showWarnings = FALSE, recursive = TRUE)
 

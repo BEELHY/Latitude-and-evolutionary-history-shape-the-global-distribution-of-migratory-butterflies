@@ -1,5 +1,6 @@
 # Range size and tropicality.
 
+# Libraries
 library(terra)
 library(dplyr)
 library(stringr)
@@ -16,11 +17,13 @@ library(brms)
 
 path <- "data/SuitabilityMaps_MigratorySpecies"
 
+# List files
 files <- list.files(path,
                     pattern = "^Binary_S[1-4].*",
                     full.names = TRUE,
                     recursive = TRUE)
 
+# Parse season and species
 meta <- tibble(file = files) %>%
   mutate(stem = tools::file_path_sans_ext(basename(file))) %>%
   mutate(
@@ -34,18 +37,21 @@ tropic_lat <- 23.4366
 calc_metrics <- function(f) {
   r <- rast(f)
 
+  # Ensure lon/lat
   if (!is.lonlat(r)) {
-    r <- project(r, "EPSG:4326", method = "near")
+    r <- project(r, "EPSG:4326", method = "near")  # Keep 0/1
   }
 
   occ  <- (r == 1)
   lat  <- init(r, "y")
   trop <- (lat >= -tropic_lat) & (lat <= tropic_lat)
 
-  a <- cellSize(r, unit = "km")
+  a <- cellSize(r, unit = "km")  # Cell area (km2)
 
+  # Total range (km2)
   range_km2 <- global(mask(a, occ, maskvalues = 0), "sum", na.rm = TRUE)[1,1]
 
+  # Tropical range (km2)
   trop_km2  <- global(mask(a, occ & trop, maskvalues = 0), "sum", na.rm = TRUE)[1,1]
 
   prop_tropics <- if (is.na(range_km2) || range_km2 == 0) NA_real_ else trop_km2 / range_km2
@@ -62,15 +68,19 @@ out <- meta %>%
   dplyr::select(species, season, prop_tropics, range_km2) %>%
   arrange(species, season)
 
+# Export
 write_csv(out, "output/range_tropics.csv")
 
+# Import data
 out <- read_csv("output/range_tropics.csv")
 
+# Plot
 ggplot(out, aes(range_km2, prop_tropics)) +
   geom_point() +
   theme_bw() +
   geom_smooth(method = "lm")
 
+# Within/between-species model
 df_ss <- out %>%
   filter(is.finite(prop_tropics), is.finite(range_km2), range_km2 > 0) %>%
   mutate(season = factor(season))
@@ -78,8 +88,8 @@ df_ss <- out %>%
 df_wb <- df_ss %>%
   group_by(species) %>%
   mutate(
-    prop_mean   = mean(prop_tropics, na.rm = TRUE),
-    prop_within = prop_tropics - prop_mean
+    prop_mean   = mean(prop_tropics, na.rm = TRUE),  # Between-species tropicality
+    prop_within = prop_tropics - prop_mean  # Within-species seasonal deviation
   ) %>%
   ungroup()
 
@@ -92,9 +102,11 @@ m_wb_p <- lmer(log10(range_km2) ~ prop_mean + prop_within + season + (1 | specie
                data = df_wb)
 summary(m_wb_p)
 
+# Effect size, 95% CI
 b  <- fixef(m_wb_p)["prop_mean"]
 se <- summary(m_wb_p)$coefficients["prop_mean","Std. Error"]
 
+# Wald 95% CI
 b_ci <- b + c(-1, 1) * 1.96 * se
 
 delta <- 0.1
@@ -105,6 +117,7 @@ pct_ci  <- (1 - mult_ci) * 100
 mult_ci
 pct_ci
 
+# Species-level plot
 df_between <- df_wb %>%
   group_by(species) %>%
   summarise(
@@ -115,13 +128,14 @@ df_between <- df_wb %>%
   filter(is.finite(prop_mean), is.finite(range_km2), range_km2 > 0) %>%
   mutate(log10_range = log10(range_km2))
 
+# Fixed-effect prediction, 95% CI
 b <- fixef(m_wb_p)
 V <- vcov(m_wb_p)
 
 grid <- data.frame(
   prop_mean   = seq(0, 1, length.out = 200),
   prop_within = 0,
-  season      = factor("S1", levels = levels(df_wb$season))
+  season      = factor("S1", levels = levels(df_wb$season))  # Reference season
 )
 
 X <- model.matrix(~ prop_mean + prop_within + season, grid)
@@ -130,6 +144,7 @@ grid$se  <- sqrt(diag(X %*% V %*% t(X)))
 grid$lwr <- grid$fit - 1.96 * grid$se
 grid$upr <- grid$fit + 1.96 * grid$se
 
+# Plot
 ggplot(df_between, aes(x = prop_mean, y = log10_range)) +
   geom_point(alpha = 0.4, size = 1.6) +
   geom_ribbon(
@@ -150,6 +165,7 @@ ggplot(df_between, aes(x = prop_mean, y = log10_range)) +
     y = expression(log[10]*"(range size, km"^2*")")
   )
 
+# Coefficient plot
 terms <- c("prop_mean", "prop_within")
 se_fix <- sqrt(diag(vcov(m_wb_p)))[terms]
 beta   <- fixef(m_wb_p)[terms]
@@ -169,10 +185,12 @@ ggplot(coef_df, aes(x = beta, y = term)) +
   theme_classic() +
   labs(x = "Effect on log10(range_km2)", y = NULL)
 
+# Add temperature seasonality
 path <- "data/climate/wc2.1_2.5m_bio_4.tif"
 
 bio4_ras <- rast(path)
 
+# Mean BIO4 per range
 extract_mechanism_metrics <- function(f, bio_layer) {
   r <- rast(f)
   if (!is.lonlat(r)) r <- project(r, "EPSG:4326", method = "near")
@@ -194,22 +212,28 @@ mechanism_df <- ras_meta %>%
 final_df <- df_wb %>%
   left_join(mechanism_df %>% dplyr::select(species, season, mean_bio4),
             by = c("species", "season"))
+# Pattern model
 m_pattern<- lmer(log10(range_km2) ~ prop_mean+prop_within + season + (1 | species), data = final_df)
 
+# Mechanism model
 m_mechanism <- lmer(log10(range_km2) ~ mean_bio4 +prop_within+ season + (1 | species), data = final_df)
 
+# Combined model
 m_combined <- lmer(log10(range_km2) ~ prop_mean+prop_within+season+ mean_bio4 + (1 | species), data = final_df)
 
 summary(m_pattern)
 summary(m_combined)
 anova(m_pattern, m_mechanism)
 
+# Season interaction check
 m_pattern_season<- lmer(log10(range_km2) ~ (prop_within +prop_mean)*season + (1 | species), data = final_df)
 summary(m_pattern_season)
 
 m_mechanism_season<- lmer(log10(range_km2) ~ (mean_bio4 +prop_within)* season + (1 | species), data = final_df)
 summary(m_mechanism_season)
+# No seasonal interaction
 
+# Phylogenetic signal
 path <- "data/phylogenic/ntDegen359_fossils_smith_brown_strategyA.tre"
 
 tree <- read.nexus(path)
@@ -218,6 +242,7 @@ tip_mapping <- tibble(original_label = tree$tip.label) %>%
     extracted_name = str_extract(original_label, "[A-Z][a-z]+_[a-z]+(?=(_|$))")
   )
 
+# Match species to tree
 final_df_genus <- final_df %>%
   mutate(genus = str_extract(species, "^[A-Z][a-z]+"))
 
@@ -231,7 +256,9 @@ exact_matches <- final_df_genus %>%
   mutate(match_type = "exact")
 
 print(paste("exact_matches:", nrow(exact_matches)))
+# 151 exact matches
 
+# Genus-level proxy tips
 unmatched_species <- final_df_genus %>%
   distinct(species, genus) %>%
   filter(!species %in% exact_matches$species)
@@ -293,9 +320,13 @@ df_phylo_scaled <- df_phylo %>%
 
 print(paste("final species", length(unique(df_phylo$species))))
 
+# 247 species matched
+
+# Phylogenetic covariance matrix
 if(!is.ultrametric(tree_final)) tree_final <- phytools::force.ultrametric(tree_final)
 A <- vcv.phylo(tree_final)
 
+# Phylogenetic model
 m_rapoport_optimized <- brm(
   log10(range_km2) ~ prop_mean+prop_within_z + season +
     (1 | gr(species_phylo, dist = "gaussian")),
@@ -348,6 +379,8 @@ ggplot(draws, aes(x = lambda)) +
     y = "Density"
   ) +
   theme_minimal()
+
+# Bio4 model with phylogeny
 
 final_df_z <- final_df %>%
   mutate(
@@ -409,10 +442,12 @@ m_sensitive <- brm(
 
 summary(m_sensitive)
 
+# Retained vs excluded species
 df_lat_sp$in_bpmm <- df_lat_sp$species %in% df_phylo$species
 
 t.test(log10(range_km2) ~ in_bpmm, data = df_wb)
 
+# Intercept-only model
 m_intercept <- brm(
   formula = log10(range_km2) ~ 1 + (1 | gr(species_phylo, dist = "gaussian")),
   data = df_phylo_scaled,

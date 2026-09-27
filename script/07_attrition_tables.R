@@ -23,6 +23,7 @@ load_ckpt <- function(name) readRDS(ckpt_path(name))
 
 log <- function(...) cat(sprintf("[%s] ", format(Sys.time(), "%H:%M:%S")), sprintf(...), "\n", sep = "")
 
+# 426 species with maps
 log("PHASE 1a: sp_426 from cached output/range_tropics.csv")
 out <- read_csv("output/range_tropics.csv", show_col_types = FALSE)
 sp_426 <- sort(unique(out$species))
@@ -50,10 +51,12 @@ meta <- tibble(file = files) %>%
   ) %>%
   dplyr::select(file, species, season)
 
+# 377 species with wingspan
 log("PHASE 1b: sp_377 (426 -> 377)")
 
 trait_range <- read_csv("output/trait_range.csv", show_col_types = FALSE)
 
+# Standardise species name format
 trait_range_u <- trait_range %>% mutate(species = str_replace_all(species, " ", "_"))
 
 trait_sp <- trait_range_u %>%
@@ -65,6 +68,7 @@ trait_sp <- trait_range_u %>%
     .groups = "drop"
   )
 
+# Wingspan-presence candidates
 cand_WS_L_notna <- trait_sp %>% filter(!is.na(WS_L)) %>% pull(species)
 cand_WS_U_notna <- trait_sp %>% filter(!is.na(WS_U)) %>% pull(species)
 cand_WS_both_notna <- trait_sp %>% filter(!is.na(WS_L), !is.na(WS_U)) %>% pull(species)
@@ -76,6 +80,7 @@ log("WS-based candidates on sp_426 -- WS_L notna=%d, WS_U notna=%d, both notna=%
     length(cand_WS_L_notna), length(cand_WS_U_notna), length(cand_WS_both_notna), length(cand_WS_either_notna),
     length(cand_WS_both_pos), length(cand_WS_either_pos))
 
+# Replicate script 03 filter
 df_sp_trait_check <- trait_range_u %>%
   group_by(species, Family) %>%
   summarise(prop_mean = mean(prop_tropics, na.rm = TRUE), .groups = "drop")
@@ -121,6 +126,7 @@ log("ADOPTED sp_377 definition [%s]: n=%d (target 377)", def_377_key, length(sp_
 n_fam_377 <- length(unique(trait_sp$Family[trait_sp$species %in% sp_377 & !is.na(trait_sp$Family)]))
 log("distinct families among sp_377: %d (manuscript says 5)", n_fam_377)
 
+# 247 phylogeny-matched species
 log("PHASE 1c: sp_247 (phylogenetic matching, deterministic fix applied)")
 
 tree_path <- "data/phylogenic/ntDegen359_fossils_smith_brown_strategyA.tre"
@@ -145,6 +151,7 @@ match_genus_proxies <- function(unmatched_species, available_tips_for_proxy, det
       arrange(genus, original_label) %>%
       group_by(genus) %>% mutate(tip_rank = row_number()) %>% ungroup()
   } else {
+    # Old order-dependent matching
     unmatched_species_indexed <- unmatched_species %>%
       group_by(genus) %>% mutate(spec_rank = row_number()) %>% ungroup()
     available_tips_indexed <- available_tips_for_proxy %>%
@@ -181,7 +188,7 @@ run_tree_matching <- function(deterministic) {
 }
 
 res_fixed  <- run_tree_matching(deterministic = TRUE)
-res_buggy  <- run_tree_matching(deterministic = FALSE)
+res_buggy  <- run_tree_matching(deterministic = FALSE)  # Comparison only
 
 log("exact_matches: %d (fixed) / %d (pre-fix, should be identical -- exact matching doesn't use row_number)",
     res_fixed$exact_n, res_buggy$exact_n)
@@ -199,6 +206,7 @@ tree_final <- keep.tip(tree, res_fixed$all_matches_unique$original_label)
 tree_final$tip.label <- res_fixed$all_matches_unique$species[match(tree_final$tip.label, res_fixed$all_matches_unique$original_label)]
 log("raw tree_final$tip.label length: %d (target 247)", length(tree_final$tip.label))
 
+# Count unique species
 dup_tip_labels <- tree_final$tip.label[duplicated(tree_final$tip.label)]
 if (length(dup_tip_labels) > 0) {
   log("duplicate tip label(s) causing the 248-vs-247 raw-vector discrepancy: %s", paste(unique(dup_tip_labels), collapse = ", "))
@@ -212,6 +220,7 @@ save_ckpt(tree_final, "tree_final_fixed")
 save_ckpt(list(res_fixed = res_fixed, res_buggy = res_buggy, changed_identity = changed_identity,
                 dup_tip_labels = dup_tip_labels), "phase1d_matching")
 
+# Nesting check
 log("PHASE 1d: nesting check across sp_247 / sp_377 / sp_426")
 nest_247_377 <- setdiff(sp_247, sp_377)
 nest_377_426 <- setdiff(sp_377, sp_426)
@@ -220,6 +229,7 @@ log("sp_377 not in sp_426: %d (should be 0, sp_377 built from sp_426's trait_ran
 nesting_ok <- (length(nest_247_377) == 0) && (length(nest_377_426) == 0)
 log("STRICT NESTING HOLDS: %s", nesting_ok)
 
+# Save subsets and notes
 saveRDS(list(sp_426 = sp_426, sp_377 = sp_377, sp_247 = sp_247), "output/subsets.rds")
 
 notes <- c(
@@ -253,6 +263,7 @@ notes <- c(
 writeLines(notes[!sapply(notes, is.null)], "log/subsets_methodology_notes.txt")
 log("saved output/subsets.rds and log/subsets_methodology_notes.txt")
 
+# Table S1: attrition tests
 log("PHASE 2: building Table S1 (stepwise attrition)")
 
 if (has_ckpt("lat_df")) {
@@ -280,6 +291,7 @@ if (has_ckpt("lat_df")) {
   save_ckpt(lat_df, "lat_df")
 }
 
+# Use unfiltered 426 species
 master_cov <- out %>%
   group_by(species) %>%
   summarise(
@@ -349,6 +361,7 @@ table_s1 <- bind_rows(row1, row2, row3)
 write_csv(table_s1, "output/TableS1_attrition.csv")
 log("saved output/TableS1_attrition.csv (3 rows)")
 
+# Table S2: nested re-estimation
 log("PHASE 3: building Table S2 (nested-subset re-estimation)")
 
 df_lat_sp <- master_cov %>% dplyr::select(species, abs_lat) %>%
@@ -367,6 +380,7 @@ fit_reversal_model <- function(subset_sp, data_obs) {
   b_int <- b["abs_lat:log_WS_U"]; se_int <- sqrt(V["abs_lat:log_WS_U", "abs_lat:log_WS_U"])
   cov_ws_int <- V["log_WS_U", "abs_lat:log_WS_U"]
 
+  # Reversal latitude, delta method
   r <- -b_ws / b_int
   var_r <- (1 / b_int)^2 * se_ws^2 + (b_ws / b_int^2)^2 * se_int^2 -
     2 * (1 / b_int) * (b_ws / b_int^2) * cov_ws_int

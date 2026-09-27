@@ -15,6 +15,7 @@ set.seed(1)
 dir.create("output/phylo_export", showWarnings = FALSE, recursive = TRUE)
 dir.create("output/tmp", showWarnings = FALSE, recursive = TRUE)
 
+# Tree, drop duplicate tip
 tree <- readRDS("output/checkpoints/tree_final_fixed.rds")
 dup_idx <- which(duplicated(tree$tip.label))
 if (length(dup_idx) > 0) {
@@ -28,7 +29,8 @@ cat(sprintf("Tree species after dedupe: %d\n", length(tree_sp)))
 
 phylo_dist_full <- cophenetic(tree)
 
-AGG_FACT <- 24
+# Presence at 1 degree
+AGG_FACT <- 24  # About 1 degree
 raster_dir <- "data/SuitabilityMaps_MigratorySpecies"
 files <- list.files(raster_dir, pattern = "\\.tif$", full.names = TRUE)
 file_sp <- sub("^Binary_S[0-9]+", "", sub("\\.tif$", "", basename(files)))
@@ -78,6 +80,7 @@ saveRDS(list(comm_tree = comm_tree, cell_xy = cell_xy, richness_247 = richness_2
 cat(sprintf("Cells with >=1 tree-covered species present: %d / %d\n",
             sum(richness_247 > 0), n_cell))
 
+# NRI/NTI, cells with >=3 species
 MIN_RICHNESS_FOR_NRI <- 3
 keep <- richness_247 >= MIN_RICHNESS_FOR_NRI
 comm_sub <- comm_tree[keep, , drop = FALSE]
@@ -104,6 +107,7 @@ nri_nti <- data.frame(
 )
 write_csv(nri_nti, "output/phylo_export/figure4d_NRI_NTI_by_cell.csv")
 
+# Covariates at 1 degree
 cat("Loading + aggregating cleaned_data_for_SAR.csv to 1 degree...\n")
 env_fine <- read_csv("output/BAM/output/cleaned_data_for_SAR.csv", show_col_types = FALSE)
 
@@ -134,6 +138,7 @@ model_df$Landuse <- relevel(model_df$Landuse, ref = "cropland")
 cat(sprintf("Final modeling dataset: %d grid cells (1-degree)\n", nrow(model_df)))
 write_csv(model_df, "output/phylo_export/figure4d_phylo_sensitivity_model_data.csv")
 
+# Three comparable GAMs
 fit_gam <- function(formula, data) {
   bam(formula, data = data, family = nb(), method = "fREML")
 }
@@ -159,6 +164,7 @@ m_phylo  <- fit_gam(
 saveRDS(list(m_full = m_full, m_subset = m_subset, m_phylo = m_phylo, data = model_df),
         "output/phylo_export/figure4d_phylo_sensitivity_models.rds")
 
+# Term comparison table
 extract_terms <- function(model, label) {
   s <- summary(model)
   para <- as.data.frame(s$p.table) %>% rownames_to_column("term") %>% mutate(part = "parametric")

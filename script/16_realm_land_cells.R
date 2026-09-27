@@ -15,6 +15,7 @@ kmz <- list.files(work, pattern = "Wallace\\.kmz$", recursive = TRUE, full.names
 unzip(kmz, exdir = file.path(work, "kml"))
 kml <- file.path(work, "kml", "doc.kml")
 
+# Use KML (WGS84) layers
 realms <- st_make_valid(st_zm(st_read(kml, "Realms", quiet = TRUE)))
 
 v     <- vect(realms["Name"])

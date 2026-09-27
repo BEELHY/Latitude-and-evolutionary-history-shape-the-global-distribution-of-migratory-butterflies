@@ -13,6 +13,7 @@ set.seed(1)
 dir.create("output/h2_sensitivity", showWarnings = FALSE, recursive = TRUE)
 log <- function(...) cat(sprintf("[%s] ", format(Sys.time(), "%H:%M:%S")), sprintf(...), "\n", sep = "")
 
+# Base table with covariates
 log("Loading cached checkpoints...")
 final_df   <- readRDS("output/checkpoints/phase1e_bio4.rds")$final_df
 bio15_tbl  <- readRDS("output/checkpoints/mean_bio4_bio15_sp247.rds") %>%
@@ -29,6 +30,7 @@ log("Base table: %d obs, %d species; missing bio15=%d, missing elev=%d",
     nrow(df_env), length(unique(df_env$species)),
     sum(is.na(df_env$mean_bio15)), sum(is.na(df_env$mean_elev)))
 
+# Keep species with wingspan
 ws_tbl <- readRDS("output/checkpoints/df_lat_sp_test.rds") %>%
   mutate(species = str_replace_all(species, " ", "_")) %>%
   dplyr::select(species, WS_L)
@@ -41,6 +43,7 @@ df_ws <- df_env %>%
 log("After WS_L + bio15/elev completeness filter: %d obs, %d species (manuscript: 783 obs, 207 species)",
     nrow(df_ws), length(unique(df_ws$species)))
 
+# Match type and tree
 matching <- readRDS("output/checkpoints/phase1d_matching.rds")$res_fixed$all_matches_unique
 log("Match types: %s", paste(capture.output(print(table(matching$match_type))), collapse = " | "))
 
@@ -110,15 +113,18 @@ fit_bpmm <- function(data, A, label) {
   )
 }
 
+# Model A: full pool
 log("=== Fitting Model A: full reconstructed pool ===")
 A_full <- build_A(unique(df_ws$species))
 res_full <- fit_bpmm(df_ws, A_full, "A_full_reconstructed")
 
+# Model B: exact matches
 log("=== Fitting Model B: exact-match-only subset ===")
 df_exact <- df_ws %>% filter(species %in% exact_species)
 A_exact  <- build_A(unique(as.character(df_exact$species)))
 res_exact <- fit_bpmm(df_exact, A_exact, "B_exact_match_only")
 
+# Report
 summary_tbl <- tibble(
   model     = c(res_full$label, res_exact$label),
   n_species = c(res_full$n_species, res_exact$n_species),

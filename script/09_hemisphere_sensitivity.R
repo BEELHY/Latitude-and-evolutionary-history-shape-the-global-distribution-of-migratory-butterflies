@@ -15,6 +15,8 @@ cat("  Hemispheric Sensitivity Analysis\n")
 cat("  Reference: Fig 2b (Bergmann) & Fig 2c (Wingspan×Lat×Range)\n")
 cat("================================================================\n\n")
 
+# Load base data
+
 df_ws <- tryCatch(
   read.csv("data/df_lat_sp.csv") %>%
     rename(family = Family) %>%
@@ -30,10 +32,12 @@ tr <- tryCatch(
 
 if (is.null(df_ws) || is.null(tr)) stop("Cannot proceed without base data files.")
 
+# Mean range per species
 df_range <- tr %>%
   group_by(species) %>%
   summarise(range_km2_mean = mean(range_km2, na.rm = TRUE), .groups = "drop")
 
+# Match Fig 2b/2c subset
 df <- df_ws %>%
   inner_join(df_range, by = "species") %>%
   filter(
@@ -50,6 +54,8 @@ df <- df_ws %>%
 
 cat(sprintf("N after merging wingspan + range: %d species\n\n", nrow(df)))
 
+# Load signed latitude
+
 signed_lat_cache <- "output/north/signed_lat_per_species.csv"
 
 if (file.exists(signed_lat_cache)) {
@@ -59,6 +65,7 @@ if (file.exists(signed_lat_cache)) {
   cat(sprintf("  Loaded %d species\n", nrow(signed_lat_df)))
 
 } else {
+  # Fallback: recompute from rasters
   cat("Cache not found — computing signed centroid latitude from rasters...\n")
   suppressPackageStartupMessages(library(terra))
 

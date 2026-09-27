@@ -1,26 +1,33 @@
 # Spatial richness GAM.
 
+# Libraries
 library(mgcv)
 library(parallel)
-library(spdep)
-library(car)
-library(ggplot2)
+library(spdep)  # Spatial diagnostics
+library(car)  # VIF
+library(ggplot2)  # Plots
 
+# Load and clean data
 file_path <- "/home/hli/im26/Distribution_model/data/cleaned_data_for_SAR.csv"
 
 df_aggressive <- read.csv(file_path)
 
+# Factors, reference level
 df_aggressive$Landuse <- factor(df_aggressive$Landuse)
 df_aggressive$Landuse <- relevel(df_aggressive$Landuse, ref = "cropland")
 
+# Drop missing values
 target_vars <- c("Richness", "Bio_4", "Bio_15", "Elevation", "HII", "Landuse", "lon", "lat")
 df_aggressive <- na.omit(df_aggressive[, target_vars])
 
+# Parallel cores
 n_cores <- max(1, detectCores() - 1)
 
+# Fit spatial GAM
 cat("\n--- [1/5] 正在拟合稳健版空间模型 (k=1500, bs='ds') --- \n")
 cat("数据集大小:", nrow(df_aggressive), "条记录\n")
 
+# bam with discrete fREML
 model_final_v2 <- bam(
   Richness ~ s(Bio_4, k=10) + s(Bio_15, k=10) + s(Elevation, k=10) +
     HII + Landuse +
@@ -28,12 +35,14 @@ model_final_v2 <- bam(
   data = df_aggressive,
   family = nb(),
   method = "fREML",
-  discrete = TRUE,
-  nthreads = n_cores
+  discrete = TRUE,  # Speeds large data
+  nthreads = n_cores  # Parallel threads
 )
 
+# Model summary
 summary(model_final_v2)
 
+# Check edf
 spatial_edf <- summary(model_final_v2)$s.table[4, "edf"]
 cat("\n空间项的有效自由度 (edf) 为:", spatial_edf, "\n")
 if(spatial_edf > 1450) {
@@ -42,11 +51,14 @@ if(spatial_edf > 1450) {
   cat("提示：edf 远小于 k，说明空间平滑项捕捉效果良好。\n")
 }
 
+# Collinearity on subsample
 cat("\n--- [2/5] 正在通过代理模型评估共线性 (内存安全版) --- \n")
 
 set.seed(123)
+# Sample 50,000 cells
 df_proxy <- df_aggressive[sample(1:nrow(df_aggressive), 50000), ]
 
+# Proxy GAM on subset
 m_proxy <- gam(
   Richness ~ s(Bio_4, k=10) + s(Bio_15, k=10) + s(Elevation, k=10) +
     HII + Landuse +
@@ -55,20 +67,25 @@ m_proxy <- gam(
   family = nb()
 )
 
+# VIF
 con_check <- concurvity(m_proxy, full = TRUE)
 cat("\n--- 共线性诊断结果 (Full Concurvity) ---\n")
 print(round(con_check, 3))
 
+# Moran's I, save outputs
 cat("\n--- [3/5] 正在执行残差空间自相关检验 (100次重复抽样自助法) --- \n")
 
+# Pearson residuals
 df_aggressive$all_res <- residuals(model_final_v2, type = "pearson")
 
+# Resampling settings
 n_boot <- 100
 moran_estimates <- numeric(n_boot)
 p_values <- numeric(n_boot)
 
-set.seed(123)
+set.seed(123)  # Reproducible sampling
 
+# Repeated Moran's I
 for(i in 1:n_boot) {
   sub_idx <- sample(1:nrow(df_aggressive), 10000)
   df_sub_loop <- df_aggressive[sub_idx, ]
@@ -84,9 +101,10 @@ for(i in 1:n_boot) {
   if(i %% 10 == 0) cat(paste0("进度: [", i, "/", n_boot, "] 轮计算完成...\n"))
 }
 
+# Summary statistics
 mean_moran <- mean(moran_estimates)
 sd_moran   <- sd(moran_estimates)
-ci_moran   <- quantile(moran_estimates, probs = c(0.025, 0.975))
+ci_moran   <- quantile(moran_estimates, probs = c(0.025, 0.975))  # 95% interval
 prop_significant <- mean(p_values < 0.05) * 100
 
 cat("\n======================================================\n")
@@ -98,10 +116,13 @@ cat("95% 置信区间 (CI)    : [", round(ci_moran[1], 4), ",", round(ci_moran[2
 cat("P值显著(<0.05)的比例 :", prop_significant, "%\n")
 cat("======================================================\n")
 
+# Save model and diagnostics
 cat("\n[数据保存] 正在将模型对象与诊断结果导出至当前工作目录...\n")
 
+# Model object
 saveRDS(model_final_v2, "butterfly_bam_model.rds")
 
+# Moran's I draws
 boot_results_df <- data.frame(
   Repetition = 1:n_boot,
   Moran_I = moran_estimates,
@@ -109,6 +130,7 @@ boot_results_df <- data.frame(
 )
 write.csv(boot_results_df, "moran_bootstrap_distribution.csv", row.names = FALSE)
 
+# Residual map data
 df_sub <- df_sub_loop
 df_sub$res <- df_sub$all_res
 map_data_df <- df_sub[, c("lon", "lat", "res", "Richness")]
@@ -119,8 +141,10 @@ cat("   - butterfly_bam_model.rds          (完整的 BAM 模型二进制对象)
 cat("   - moran_bootstrap_distribution.csv (100次抽样的 Moran's I 值)\n")
 cat("   - spatial_residuals_map_data.csv   (用于画残差地图的经纬度点)\n")
 
+# Diagnostic plots
 cat("\n--- [4/5] 正在生成默认诊断图表 --- \n")
 
+# Residual map
 p_res <- ggplot(map_data_df, aes(x = lon, y = lat, color = res)) +
   geom_point(alpha = 0.5, size = 0.5) +
   scale_color_gradient2(low = "blue", mid = "white", high = "red") +
@@ -129,6 +153,7 @@ p_res <- ggplot(map_data_df, aes(x = lon, y = lat, color = res)) +
        subtitle = paste0("Mean Moran's I: ", round(mean_moran, 4),
                          " | 95% CI: [", round(ci_moran[1], 4), ", ", round(ci_moran[2], 4), "]"))
 
+# Standard GAM checks
 try(gam.check(model_final_v2))
 
 ggsave("residuals_map.png", p_res, width=12, height=6)

@@ -13,6 +13,7 @@ mod <- bundle$m_A
 cf <- coef(mod)
 V  <- vcov(mod)
 
+# Environmental predictors
 env_vars <- c(Bio_4 = "Bio_4", Bio_15 = "Bio_15", Elevation = "Elevation", HII = "HII")
 env_df <- tibble::tibble(
   variable = names(env_vars),
@@ -21,6 +22,7 @@ env_df <- tibble::tibble(
   type     = "Environmental"
 )
 
+# Land use vs built
 b_built <- cf["Landusebuilt"]; v_built <- V["Landusebuilt", "Landusebuilt"]
 landuse_contrast <- function(name, coef_name) {
   if (is.na(coef_name)) {

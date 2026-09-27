@@ -1,5 +1,6 @@
 # Phylogenetic mixed models.
 
+# Add elevation, precipitation
 library(tidybayes)
 library(bayesplot)
 library(broom.mixed)
@@ -143,6 +144,7 @@ summary(m_combined_phylo)
 posterior <- as.array(m_combined_phylo)
 mcmc_pairs(posterior, pars = c("b_Intercept", "b_mean_bio4_z", "b_mean_bio15_z", "sigma"))
 
+# Sensitivity test
 m_subset_glmm <- brm(
   log10(range_km2) ~ mean_bio4_z + mean_bio15_z + mean_elev_z +
     prop_within_z + season +
@@ -164,10 +166,12 @@ m_full_glmm <- lmer(log10(range_km2) ~ prop_within +
                                 season + mean_bio15 + mean_elev + mean_bio4 +
                                 (1 | species),
                               data = final_df_scaled)
+# Plot
 d1 <- tidy(m_full_glmm, conf.int = TRUE) %>% mutate(model = "Full GLMM (N=1377)")
 d2 <- tidy(m_subset_glmm, conf.int = TRUE) %>% mutate(model = "Subset GLMM (N=783)")
 d3 <- tidy(m_combined_phylo, conf.int = TRUE) %>% mutate(model = "Subset PGLMM (N=783)")
 
+# Label terms
 process_model_data <- function(df) {
   df %>%
     mutate(term = str_remove(term, "^b_")) %>%
@@ -191,6 +195,7 @@ process_model_data <- function(df) {
 
 plot_df <- bind_rows(d1, d2, d3) %>% process_model_data()
 
+# Plot
 ggplot(plot_df, aes(y = reorder(clean_term, estimate), x = estimate,
                     color = model, group = model)) +
   geom_vline(xintercept = 0, color = "gray50", linetype = "dashed", size = 0.6) +
@@ -228,6 +233,7 @@ ggplot(plot_df, aes(y = reorder(clean_term, estimate), x = estimate,
     plot.title = element_text(face = "bold", size = 14)
   )
 
+# Predictor correlations
 df_full_corr <- final_df_scaled %>%
   dplyr::select(mean_bio4, mean_bio15, mean_elev, prop_within)
 
@@ -249,6 +255,7 @@ ggpairs(df_subset_corr,
         lower = list(continuous = wrap("smooth", alpha = 0.1, size = 0.1, color = "#E67E22"))) +
   theme_bw()
 
+# Figure 2d coefficients
 df <- data.frame(
   Variable = factor(c('Grassland', 'Shrubs', 'Trees/Forest', 'Cropland', 'Bio_4', 'Bio_15', 'Elevation', 'HII'),
                     levels = rev(c('Grassland', 'Shrubs', 'Trees/Forest', 'Cropland', 'Bio_4', 'Bio_15', 'Elevation', 'HII'))),
@@ -294,6 +301,7 @@ ggplot(df, aes(x = Estimate, y = Variable, color = Model, fill = Model)) +
   labs(title = "Model Comparison with Visible Error Bars",
        x = "Estimate (95% CI)")
 
+# LOO comparison
 m_no_phylo <- m_no_phylo_bayes <- brm(
   formula = log10(range_km2) ~ mean_bio4_z + mean_bio15_z + mean_elev_z + prop_within_z + season,
   data = df_model_WS_L,

@@ -24,6 +24,7 @@ region2realm <- c(
   "Novozelandic"     = "Australian",
   "Papua-Melanesian" = "Papua-Melanesian"
 )
+# Unrepresented regions
 write.csv(data.frame(Region = names(region2realm), Realm = unname(region2realm)),
           "output/region_comparison/Table_S_Region_to_Realm_Holt2013.csv", row.names = FALSE)
 
@@ -36,7 +37,7 @@ counts    <- as.matrix(raw[, rich_cols]); storage.mode(counts) <- "double"
 rownames(counts) <- raw$Region
 
 stopifnot(all(abs(rowSums(counts) - raw$Total_Migratory_Cells) < 1e-6))
-stopifnot(setequal(rownames(counts), names(region2realm)))
+stopifnot(setequal(rownames(counts), names(region2realm)))  # All regions mapped
 
 global_counts <- colSums(counts)
 global_total  <- sum(global_counts)
@@ -49,6 +50,7 @@ cat(sprintf("S* = %d | %s occupied cells | %s hotspot cells\n\n",
             S_star, format(global_total, big.mark = ","),
             format(global_hot, big.mark = ",")))
 
+# Aggregate regions to realms
 summarise_units <- function(mapping) {
   realms <- unique(mapping)
   lapply(realms, function(rl) {
@@ -79,6 +81,7 @@ realms_out <- realms %>%
 write.csv(realms_out, "output/region_comparison/Table_S_Realm_Hotspot_Metrics.csv", row.names = FALSE)
 print(realms_out %>% select(-Regions), row.names = FALSE)
 
+# Figure: grouped bars
 COL_OCC <- "#E69F00"
 COL_HOT <- "#0072B2"
 
@@ -89,6 +92,7 @@ fmt_pct <- function(x) {
                    paste0(formatC(x, format = "f", digits = 1), "%"))))
 }
 
+# Occupancy: global vs within-realm
 land <- read.csv("output/region_comparison/Table_S_Realm_Land_Cells.csv", stringsAsFactors = FALSE)
 stopifnot(setequal(land$Realm, realms$Realm))
 
@@ -98,6 +102,7 @@ occ <- realms %>%
     Global_share = 100 * Occupied_cells / global_total,
     Within_realm = 100 * Occupied_cells / Land_cells
   )
+# Sanity check
 stopifnot(all(occ$Occupied_cells <= occ$Land_cells))
 
 occ <- occ %>% arrange(desc(Global_share))
@@ -122,11 +127,13 @@ shares <- occ %>%
 
 p <- ggplot(shares, aes(pct, Realm, fill = metric)) +
   geom_col(position = position_dodge(width = 0.78), width = 0.70) +
+  # Direct value labels
   geom_text(aes(label = lab), position = position_dodge(width = 0.78),
             hjust = -0.15, size = 2.6, colour = "grey30") +
   scale_fill_manual(values = c("% of that realm's land cells that are occupied" = COL_OCC,
                                "% of the world's occupied cells"                 = COL_HOT),
                     name = NULL) +
+  # Match legend to bars
   guides(fill = guide_legend(reverse = TRUE)) +
   scale_x_continuous(limits = c(0, 46), breaks = seq(0, 40, 10),
                      expand = expansion(mult = c(0, 0.01)),
