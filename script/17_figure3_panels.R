@@ -23,9 +23,8 @@ dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 # Load data
 trait_range <- read_csv("output/trait_range.csv", show_col_types = FALSE)
-df_lat_sp   <- readRDS("output/checkpoints/df_lat_sp_test.rds") %>%
-  mutate(species = str_replace_all(species, " ", "_"))
-tree_final  <- readRDS("output/checkpoints/tree_final_fixed.rds")
+df_lat_sp   <- read_csv("output/df_lat_sp.csv", show_col_types = FALSE)
+tree_final  <- read.tree("updatedata/phylogeny_matched.tre")
 dup_idx <- which(duplicated(tree_final$tip.label))
 if (length(dup_idx) > 0) {
   cat(sprintf("Dropping %d duplicated tip label(s): %s\n", length(dup_idx),
@@ -148,15 +147,4 @@ ggsave(file.path(out_dir, "Figure3_hist.png"), p_hist,
        width = 1.95, height = 1.6,  # Native size keeps 12pt
        dpi = 300, bg = "transparent")
 cat(sprintf("Saved: %s and Figure3_hist.png\n", file.path(out_dir, "Figure3_base.png")))
-cat("Next: run script/22_figure3_compose.py to overlay family labels + butterfly photos\n")
-cat("      at positions/angles/sizes read directly from output/Manuscript/figure 3.pdf.\n")
-
-# Methods text (C24)
-cat("\n=== Methods paragraph to add (addresses reviewer comment C24) ===\n")
-cat("Ancestral range sizes at internal nodes (Fig. 3) were estimated by\n")
-cat("maximum-likelihood ancestral state reconstruction under a Brownian-\n")
-cat("motion model of evolution (phytools::fastAnc; Revell 2012), applied to\n")
-cat("log10-transformed mean range size for the species matched to the\n")
-cat("pruned phylogeny. Branch and node colours in Fig. 3 show, respectively,\n")
-cat("each tip's observed value and each internal node's reconstructed\n")
-cat("ancestral value on this scale.\n")
+cat("Next: run script/18_figure3_compose.py to overlay family labels + butterfly photos\n")

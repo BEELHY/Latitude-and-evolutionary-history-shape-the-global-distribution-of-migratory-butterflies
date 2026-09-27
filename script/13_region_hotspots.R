@@ -4,7 +4,9 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 
-in_file <- "output/region_comparison/1.计数Region_Richness_Distribution.csv"
+dir.create("output/region_comparison", showWarnings = FALSE, recursive = TRUE)
+
+in_file <- "updatedata/region_richness_counts.csv"
 
 raw <- read.csv(in_file, check.names = FALSE, fileEncoding = "UTF-8")
 

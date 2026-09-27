@@ -1,4 +1,4 @@
-# Match wingspan trait data.
+# Join wingspan and range.
 
 # Libraries
 library(tidyverse)
@@ -9,45 +9,9 @@ library(lmerTest)
 library(ggplot2)
 
 # Import data
-migr <- read_csv("output/range_tropics.csv")
-trait <- read_csv("data/harmonized_LepTraits.csv")
-
-# Species table
-migr_species <- as.data.frame(unique(migr$species))
-colnames(migr_species) <- "Species"
-migr_species <- migr_species %>%
-  mutate(Species = str_replace_all(Species, "_", " "))
-
-# Merge traits
-migr_trait <- dplyr::left_join(migr_species, trait, by = "Species")
-
-# Fill missing with means
-migr_trait_calc <- migr_trait %>%
-  mutate(
-    WS_L = if_else(
-      is.na(WS_L),
-      {m <- rowMeans(cbind(WS_L_Fem, WS_L_Mal), na.rm = TRUE)
-      ifelse(is.nan(m), NA_real_, m)},
-      WS_L
-    ),
-    WS_U = if_else(
-      is.na(WS_U),
-      {m <- rowMeans(cbind(WS_U_Fem, WS_U_Mal), na.rm = TRUE)
-      ifelse(is.nan(m), NA_real_, m)},
-      WS_U
-    )
-  ) %>%
-  dplyr::select(ValidBinomial, Family, WS_L, WS_U)
-
-migr_trait_calc <- migr_trait_calc %>%
-  filter(!if_all(everything(), is.na))
-
-# Export
-write_csv(migr_trait_calc, "output/migr_trait.csv")
-
-# Import data
-migr_trait <- read_csv("output/migr_trait.csv")
-range <- read_csv("output/range_tropics.csv")
+migr_trait <- read_csv("updatedata/wingspan_traits.csv")
+range <- read_csv("updatedata/species_season_metrics.csv") %>%
+  dplyr::select(species, season, prop_tropics, range_km2)
 
 # Wrangle data
 colnames(migr_trait)[1] <- "species"
@@ -59,6 +23,7 @@ trait_range <- dplyr::left_join(range, migr_trait, by = c("species"))
 trait_range <- unique(trait_range)
 
 # Export
+dir.create("output", showWarnings = FALSE)
 write_csv(trait_range, "output/trait_range.csv")
 
 # Species-level data

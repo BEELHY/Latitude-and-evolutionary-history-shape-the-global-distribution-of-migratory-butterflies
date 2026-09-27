@@ -1,4 +1,5 @@
 # Phylogenetic mixed models.
+# Run after 01-03, same session
 
 # Add elevation, precipitation
 library(tidybayes)
@@ -6,35 +7,8 @@ library(bayesplot)
 library(broom.mixed)
 library(GGally)
 
-path <- "data/climate/wc2.1_2.5m_bio_15.tif"
-
-bio15_ras <- rast(path)
-
-path <- "data/climate/wc2.1_2.5m_elev.tif"
-
-elev_ras <- rast(path)
-
-extract_mechanism_metrics <- function(f, env_layer) {
-  r <- rast(f)
-
-  if (!is.lonlat(r)) r <- project(r, "EPSG:4326", method = "near")
-
-  env_resampled <- resample(env_layer, r, method = "bilinear")
-
-  if (global(r == 1, "sum", na.rm = TRUE)[1, 1] == 0) return(NA_real_)
-
-  occ_env <- mask(env_resampled, r, maskvalues = 0)
-
-  res <- global(occ_env, "mean", na.rm = TRUE)[1, 1]
-  return(res)
-}
-
-mechanism_df <- ras_meta %>%
-  mutate(
-    mean_elev  = map_dbl(file, ~extract_mechanism_metrics(.x, elev_ras)),
-    mean_bio15 = map_dbl(file, ~extract_mechanism_metrics(.x, bio15_ras)),
-    mean_bio4  = map_dbl(file, ~extract_mechanism_metrics(.x, bio4_ras))
-  )
+mechanism_df <- read_csv("updatedata/species_season_metrics.csv") %>%
+  dplyr::select(species, season, mean_bio4, mean_bio15, mean_elev)
 
 final_df <- df_wb %>%
   left_join(mechanism_df %>%
@@ -101,7 +75,7 @@ m_combined_phylo_L <- brm(
     prior(exponential(1), class = "sd"),
     prior(exponential(1), class = "sigma")
   ),
-  chains = 4, iter = 6000, warmup = 2000, cores = 4,
+  chains = 4, iter = 6000, warmup = 2000, cores = 4, seed = 1,
   control = list(adapt_delta = 0.99, max_treedepth = 15)
 )
 
@@ -117,7 +91,7 @@ m_combined_phylo_U <- brm(
     prior(exponential(1), class = "sd"),
     prior(exponential(1), class = "sigma")
   ),
-  chains = 4, iter = 6000, warmup = 2000, cores = 4,
+  chains = 4, iter = 6000, warmup = 2000, cores = 4, seed = 1,
   control = list(adapt_delta = 0.99, max_treedepth = 15)
 )
 
@@ -133,7 +107,7 @@ m_combined_phylo <- brm(
     prior(exponential(1), class = "sd"),
     prior(exponential(1), class = "sigma")
   ),
-  chains = 4, iter = 6000, warmup = 2000, cores = 4,
+  chains = 4, iter = 6000, warmup = 2000, cores = 4, seed = 1,
   control = list(adapt_delta = 0.99, max_treedepth = 15)
 )
 
@@ -156,7 +130,7 @@ m_subset_glmm <- brm(
     prior(exponential(1), class = "sd"),
     prior(exponential(1), class = "sigma")
   ),
-  chains = 4, iter = 6000, warmup = 2000, cores = 4,
+  chains = 4, iter = 6000, warmup = 2000, cores = 4, seed = 1,
   control = list(adapt_delta = 0.99)
 )
 
@@ -255,71 +229,25 @@ ggpairs(df_subset_corr,
         lower = list(continuous = wrap("smooth", alpha = 0.1, size = 0.1, color = "#E67E22"))) +
   theme_bw()
 
-# Figure 2d coefficients
-df <- data.frame(
-  Variable = factor(c('Grassland', 'Shrubs', 'Trees/Forest', 'Cropland', 'Bio_4', 'Bio_15', 'Elevation', 'HII'),
-                    levels = rev(c('Grassland', 'Shrubs', 'Trees/Forest', 'Cropland', 'Bio_4', 'Bio_15', 'Elevation', 'HII'))),
-  Model = rep(c("OLS", "GLM"), each = 8),
-  Estimate = c(-3.311, -3.117, -2.408, -1.753, -0.689, -0.310, 0.036, 0.136,
-               -1.786, -1.188, -0.892, -0.396, -0.648, -0.454, 0.053, 0.137),
-  Lower = c(-3.463, -3.272, -2.567, -1.909, -0.696, -0.321, 0.026, 0.130,
-            -1.895, -1.317, -1.000, -0.525, -0.655, -0.466, 0.039, 0.129),
-  Upper = c(-3.111, -2.925, -2.201, -1.561, -0.682, -0.299, 0.045, 0.141,
-            -1.668, -1.035, -0.766, -0.259, -0.641, -0.442, 0.066, 0.146)
-)
-
-df <- data.frame(
-  Variable = factor(c('Grassland', 'Shrubs', 'Trees/Forest', 'Cropland', 'Bio_4', 'Bio_15', 'Elevation', 'HII'),
-                    levels = rev(c('Grassland', 'Shrubs', 'Trees/Forest', 'Cropland', 'Bio_4', 'Bio_15', 'Elevation', 'HII'))),
-  Model = rep(c("OLS", "GLM"), each = 8),
-  Estimate = c(-3.311, -3.117, -2.408, -1.753, -0.689, -0.310, 0.036, 0.136,
-               -1.786, -1.188, -0.892, -0.396, -0.648, -0.454, 0.053, 0.137),
-  Lower = c(-3.463, -3.272, -2.567, -1.909, -0.696, -0.321, 0.026, 0.130,
-            -1.895, -1.317, -1.000, -0.525, -0.655, -0.466, 0.039, 0.129),
-  Upper = c(-3.111, -2.925, -2.201, -1.561, -0.682, -0.299, 0.045, 0.141,
-            -1.668, -1.035, -0.766, -0.259, -0.641, -0.442, 0.066, 0.146)
-)
-
-pd <- position_dodge(width = 0.6)
-
-ggplot(df, aes(x = Estimate, y = Variable, color = Model, fill = Model)) +
-  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
-
-  geom_point(aes(shape = Model),
-             size = 2.5,
-             position = pd,
-             alpha = 0.7) +
-  geom_errorbarh(aes(xmin = Lower, xmax = Upper),
-                 height = 0.4,
-                 linewidth = 0.8,
-                 position = pd) +
-
-  scale_color_manual(values = c("OLS" = "#56B4E9", "GLM" = "#D55E00")) +
-  theme_bw() +
-  theme(legend.position = "top",
-        panel.grid.minor = element_blank()) +
-  labs(title = "Model Comparison with Visible Error Bars",
-       x = "Estimate (95% CI)")
-
 # LOO comparison
-m_no_phylo <- m_no_phylo_bayes <- brm(
+m_no_phylo <- brm(
   formula = log10(range_km2) ~ mean_bio4_z + mean_bio15_z + mean_elev_z + prop_within_z + season,
   data = df_model_WS_L,
   family = gaussian(),
   chains = 4,
   iter = 2000,
-  cores = 4
+  cores = 4, seed = 1
 )
 
 summary(m_no_phylo)
 
-m_no_phylo_all <- m_no_phylo_bayes <- brm(
+m_no_phylo_all <- brm(
   formula = log10(range_km2) ~ mean_bio4 + mean_bio15 + mean_elev + prop_within + season,
   data = final_df,
   family = gaussian(),
   chains = 4,
   iter = 2000,
-  cores = 4
+  cores = 4, seed = 1
 )
 
 summary(m_no_phylo_all)

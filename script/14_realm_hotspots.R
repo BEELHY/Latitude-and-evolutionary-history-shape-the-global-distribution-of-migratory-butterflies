@@ -4,6 +4,8 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 
+dir.create("output/region_comparison", showWarnings = FALSE, recursive = TRUE)
+
 region2realm <- c(
   "North American"   = "Nearctic",
   "Mexican"          = "Nearctic",
@@ -28,7 +30,7 @@ region2realm <- c(
 write.csv(data.frame(Region = names(region2realm), Realm = unname(region2realm)),
           "output/region_comparison/Table_S_Region_to_Realm_Holt2013.csv", row.names = FALSE)
 
-raw <- read.csv("output/region_comparison/1.计数Region_Richness_Distribution.csv",
+raw <- read.csv("updatedata/region_richness_counts.csv",
                 check.names = FALSE, fileEncoding = "UTF-8")
 
 rich_cols <- setdiff(names(raw), c("Region", "Total_Migratory_Cells"))
@@ -93,7 +95,7 @@ fmt_pct <- function(x) {
 }
 
 # Occupancy: global vs within-realm
-land <- read.csv("output/region_comparison/Table_S_Realm_Land_Cells.csv", stringsAsFactors = FALSE)
+land <- read.csv("updatedata/realm_land_cells.csv", stringsAsFactors = FALSE)
 stopifnot(setequal(land$Realm, realms$Realm))
 
 occ <- realms %>%

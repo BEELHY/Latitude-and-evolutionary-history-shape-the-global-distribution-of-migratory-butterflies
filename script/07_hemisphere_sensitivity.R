@@ -1,9 +1,6 @@
 # Hemisphere sensitivity test.
 
-setwd("/Users/hlii0385/Desktop/Phd_Haiyu_LI/Rapoport-s-rule-and-Bergmann-s-rule-of-Migratory-butterflies")
-
 suppressPackageStartupMessages({
-  library(terra)
   library(dplyr)
   library(stringr)
   library(lme4)
@@ -18,9 +15,8 @@ cat("================================================================\n\n")
 # Load base data
 
 df_ws <- tryCatch(
-  read.csv("data/df_lat_sp.csv") %>%
-    rename(family = Family) %>%
-    mutate(species = str_replace_all(species, " ", "_")),
+  read.csv("output/df_lat_sp.csv") %>%
+    rename(family = Family),
   error = function(e) { cat("ERROR loading df_lat_sp.csv:", conditionMessage(e), "\n"); NULL }
 )
 
@@ -56,61 +52,8 @@ cat(sprintf("N after merging wingspan + range: %d species\n\n", nrow(df)))
 
 # Load signed latitude
 
-signed_lat_cache <- "output/north/signed_lat_per_species.csv"
-
-if (file.exists(signed_lat_cache)) {
-  cat(sprintf("Loading signed centroid latitude from %s ...\n", signed_lat_cache))
-  signed_lat_df <- read.csv(signed_lat_cache) %>%
-    mutate(species = str_replace_all(species, " ", "_"))
-  cat(sprintf("  Loaded %d species\n", nrow(signed_lat_df)))
-
-} else {
-  # Fallback: recompute from rasters
-  cat("Cache not found — computing signed centroid latitude from rasters...\n")
-  suppressPackageStartupMessages(library(terra))
-
-  ras_path  <- "data/SuitabilityMaps_MigratorySpecies"
-  ras_files <- list.files(ras_path, pattern = "^Binary_S[1-4].*\\.tif$",
-                          full.names = TRUE, recursive = FALSE)
-
-  ras_meta <- tibble(file = ras_files) %>%
-    mutate(
-      stem    = tools::file_path_sans_ext(basename(file)),
-      season  = str_extract(stem, "S[1-4]"),
-      species = str_replace(stem, "^Binary_S[1-4]", "")
-    )
-
-  one_per_sp <- ras_meta %>%
-    arrange(species, season) %>%
-    group_by(species) %>% slice(1) %>% ungroup() %>%
-    filter(species %in% df$species)
-
-  cat(sprintf("  Will process %d species\n", nrow(one_per_sp)))
-
-  get_signed_lat <- function(f) {
-    tryCatch({
-      r <- rast(f)
-      if (!is.lonlat(r)) r <- project(r, "EPSG:4326", method = "near")
-      lat    <- init(r, "y")
-      masked <- mask(lat, r, maskvalues = 0)
-      as.numeric(global(masked, "mean", na.rm = TRUE)[1, 1])
-    }, error = function(e) NA_real_)
-  }
-
-  signed_lats <- numeric(nrow(one_per_sp))
-  for (i in seq_len(nrow(one_per_sp))) {
-    if (i %% 50 == 0 || i == 1)
-      cat(sprintf("    [%d / %d]\n", i, nrow(one_per_sp)))
-    signed_lats[i] <- get_signed_lat(one_per_sp$file[i])
-  }
-
-  signed_lat_df <- one_per_sp %>%
-    mutate(centroid_latitude = signed_lats) %>%
-    dplyr::select(species, centroid_latitude)
-
-  write.csv(signed_lat_df, signed_lat_cache, row.names = FALSE)
-  cat(sprintf("  Saved to %s\n", signed_lat_cache))
-}
+signed_lat_df <- read.csv("updatedata/signed_centroid_latitude.csv")
+cat(sprintf("Loaded signed centroid latitude: %d species\n", nrow(signed_lat_df)))
 
 df <- df %>%
   left_join(signed_lat_df, by = "species")

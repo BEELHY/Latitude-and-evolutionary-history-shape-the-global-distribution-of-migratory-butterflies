@@ -19,9 +19,12 @@ dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 # Load data
 trait_range  <- read_csv("output/trait_range.csv", show_col_types = FALSE)
-mean_bio4_ss <- read_csv("output/mean_bio4_per_species_season.csv", show_col_types = FALSE)
-df_lat_sp    <- readRDS("output/checkpoints/df_lat_sp_test.rds") %>%
-  mutate(species = str_replace_all(species, " ", "_"))
+tree_sp      <- ape::read.tree("updatedata/phylogeny_matched.tre")$tip.label
+# BIO4 colour: phylogeny subset
+mean_bio4_ss <- read_csv("updatedata/species_season_metrics.csv", show_col_types = FALSE) %>%
+  dplyr::filter(species %in% tree_sp) %>%
+  dplyr::select(species, season, mean_bio4)
+df_lat_sp    <- read_csv("output/df_lat_sp.csv", show_col_types = FALSE)
 
 final_df <- trait_range %>%
   mutate(species = str_replace_all(species, " ", "_")) %>%
@@ -164,4 +167,4 @@ save_panel(add_tag(p2c, "c"), "panel_c")
 save_panel(add_tag(p2d, "d"), "panel_d")
 
 cat(sprintf("Saved 4 panels (PNG @ %d dpi + PDF) to: %s\n", PANEL_DPI, panel_dir))
-cat("Next: run script/20_figure2_compose.py to lay them out into the final Figure 2 grid.\n")
+cat("Next: run script/16_figure2_compose.py to lay them out into the final Figure 2 grid.\n")

@@ -58,7 +58,7 @@ extract_terms <- function(model, label) {
   s <- summary(model)
   para <- as.data.frame(s$p.table); para$term <- rownames(para); para$part <- "parametric"
   smooth <- as.data.frame(s$s.table); smooth$term <- rownames(smooth); smooth$part <- "smooth"
-  rbind(para[, c("term","Estimate","Std. Error","Pr(>|z|)","part")] %>%
+  rbind(para[, c("term", colnames(s$p.table)[c(1, 2, 4)], "part")] %>%
           setNames(c("term","estimate","std_error","p_value","part")),
         data.frame(term = smooth$term, estimate = NA, std_error = NA,
                    p_value = smooth[["p-value"]], part = "smooth")) %>%

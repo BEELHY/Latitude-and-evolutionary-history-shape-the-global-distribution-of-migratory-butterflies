@@ -9,5 +9,6 @@
 
 module load r/4.4.1
 
-Rscript 11_hpc_install.R
-Rscript 11_richness_gam_hpc.R
+# Run from project root
+Rscript script/08_hpc_install.R
+Rscript script/08_richness_gam_hpc.R

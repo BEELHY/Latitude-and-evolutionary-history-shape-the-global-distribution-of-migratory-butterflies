@@ -1,7 +1,6 @@
 # Range size and tropicality.
 
 # Libraries
-library(terra)
 library(dplyr)
 library(stringr)
 library(tidyverse)
@@ -9,70 +8,13 @@ library(ggplot2)
 library(lme4)
 library(lmerTest)
 library(MuMIn)
-library(dismo)
-library(geodata)
-library(raster)
 library(ape)
 library(brms)
 
-path <- "data/SuitabilityMaps_MigratorySpecies"
-
-# List files
-files <- list.files(path,
-                    pattern = "^Binary_S[1-4].*",
-                    full.names = TRUE,
-                    recursive = TRUE)
-
-# Parse season and species
-meta <- tibble(file = files) %>%
-  mutate(stem = tools::file_path_sans_ext(basename(file))) %>%
-  mutate(
-    season  = str_match(stem, "^Binary_(S[1-4])")[,2],
-    species = str_match(stem, "^Binary_(S[1-4])(.*)$")[,3]
-  ) %>%
-  dplyr::select(file, species, season)
-
-tropic_lat <- 23.4366
-
-calc_metrics <- function(f) {
-  r <- rast(f)
-
-  # Ensure lon/lat
-  if (!is.lonlat(r)) {
-    r <- project(r, "EPSG:4326", method = "near")  # Keep 0/1
-  }
-
-  occ  <- (r == 1)
-  lat  <- init(r, "y")
-  trop <- (lat >= -tropic_lat) & (lat <= tropic_lat)
-
-  a <- cellSize(r, unit = "km")  # Cell area (km2)
-
-  # Total range (km2)
-  range_km2 <- global(mask(a, occ, maskvalues = 0), "sum", na.rm = TRUE)[1,1]
-
-  # Tropical range (km2)
-  trop_km2  <- global(mask(a, occ & trop, maskvalues = 0), "sum", na.rm = TRUE)[1,1]
-
-  prop_tropics <- if (is.na(range_km2) || range_km2 == 0) NA_real_ else trop_km2 / range_km2
-
-  tibble(prop_tropics = prop_tropics,
-         range_km2     = range_km2)
-}
-
-out <- meta %>%
-  rowwise() %>%
-  mutate(tmp = list(calc_metrics(file))) %>%
-  tidyr::unnest(tmp) %>%
-  ungroup() %>%
-  dplyr::select(species, season, prop_tropics, range_km2) %>%
-  arrange(species, season)
-
-# Export
-write_csv(out, "output/range_tropics.csv")
-
-# Import data
-out <- read_csv("output/range_tropics.csv")
+# Species-season metrics
+metrics <- read_csv("updatedata/species_season_metrics.csv")
+out <- metrics %>%
+  dplyr::select(species, season, prop_tropics, range_km2)
 
 # Plot
 ggplot(out, aes(range_km2, prop_tropics)) +
@@ -186,31 +128,8 @@ ggplot(coef_df, aes(x = beta, y = term)) +
   labs(x = "Effect on log10(range_km2)", y = NULL)
 
 # Add temperature seasonality
-path <- "data/climate/wc2.1_2.5m_bio_4.tif"
-
-bio4_ras <- rast(path)
-
-# Mean BIO4 per range
-extract_mechanism_metrics <- function(f, bio_layer) {
-  r <- rast(f)
-  if (!is.lonlat(r)) r <- project(r, "EPSG:4326", method = "near")
-
-  bio_layer <- resample(bio_layer, r, method="bilinear")
-
-  occ <- (r == 1)
-  if (global(occ, "sum", na.rm = TRUE)[1, 1] == 0) return(NA_real_)
-
-  occ_bio <- mask(bio_layer, r, maskvalues = 0)
-
-  mean_bio4 <- global(occ_bio, "mean", na.rm = TRUE)[1, 1]
-  return(mean_bio4)
-}
-
-mechanism_df <- ras_meta %>%
-  mutate(mean_bio4 = map_dbl(file, ~extract_mechanism_metrics(.x, bio4_ras)))
-
 final_df <- df_wb %>%
-  left_join(mechanism_df %>% dplyr::select(species, season, mean_bio4),
+  left_join(metrics %>% dplyr::select(species, season, mean_bio4),
             by = c("species", "season"))
 # Pattern model
 m_pattern<- lmer(log10(range_km2) ~ prop_mean+prop_within + season + (1 | species), data = final_df)
@@ -234,75 +153,7 @@ summary(m_mechanism_season)
 # No seasonal interaction
 
 # Phylogenetic signal
-path <- "data/phylogenic/ntDegen359_fossils_smith_brown_strategyA.tre"
-
-tree <- read.nexus(path)
-tip_mapping <- tibble(original_label = tree$tip.label) %>%
-  mutate(
-    extracted_name = str_extract(original_label, "[A-Z][a-z]+_[a-z]+(?=(_|$))")
-  )
-
-# Match species to tree
-final_df_genus <- final_df %>%
-  mutate(genus = str_extract(species, "^[A-Z][a-z]+"))
-
-tip_mapping_genus <- tip_mapping %>%
-  mutate(genus = str_extract(extracted_name, "^[A-Z][a-z]+")) %>%
-  filter(!is.na(genus))
-
-exact_matches <- final_df_genus %>%
-  distinct(species, genus) %>%
-  inner_join(tip_mapping_genus, by = c("species" = "extracted_name", "genus" = "genus")) %>%
-  mutate(match_type = "exact")
-
-print(paste("exact_matches:", nrow(exact_matches)))
-# 151 exact matches
-
-# Genus-level proxy tips
-unmatched_species <- final_df_genus %>%
-  distinct(species, genus) %>%
-  filter(!species %in% exact_matches$species)
-
-used_exact_tips <- exact_matches$original_label
-
-available_tips_for_proxy <- tip_mapping_genus %>%
-  filter(!original_label %in% used_exact_tips)
-
-unmatched_species_indexed <- unmatched_species %>%
-  arrange(genus, species) %>%
-  group_by(genus) %>%
-  mutate(spec_rank = row_number()) %>%
-  ungroup()
-
-available_tips_indexed <- available_tips_for_proxy %>%
-  arrange(genus, original_label) %>%
-  group_by(genus) %>%
-  mutate(tip_rank = row_number()) %>%
-  ungroup()
-
-genus_proxies <- unmatched_species_indexed %>%
-  inner_join(
-    available_tips_indexed %>% dplyr::select(genus, original_label, tip_rank),
-    by = c("genus" = "genus", "spec_rank" = "tip_rank")
-  ) %>%
-  mutate(match_type = "genus_proxy") %>%
-  dplyr::select(species, original_label, match_type)
-
-print(paste("add species", nrow(genus_proxies)))
-
-all_matches <- bind_rows(
-  exact_matches %>% dplyr::select(species, original_label, match_type),
-  genus_proxies %>% dplyr::select(species, original_label, match_type)
-)
-
-all_matches_unique <- all_matches %>%
-  group_by(original_label) %>%
-  slice(1) %>%
-  ungroup()
-
-tree_final <- keep.tip(tree, all_matches_unique$original_label)
-
-tree_final$tip.label <- all_matches_unique$species[match(tree_final$tip.label, all_matches_unique$original_label)]
+tree_final <- read.tree("updatedata/phylogeny_matched.tre")
 
 df_phylo <- final_df %>%
   filter(species %in% tree_final$tip.label)
@@ -341,7 +192,7 @@ m_rapoport_optimized <- brm(
   chains = 4,
   iter = 6000,
   warmup = 2000,
-  cores = 4,
+  cores = 4, seed = 1,
   control = list(
     adapt_delta = 0.99,
     max_treedepth = 15
@@ -367,7 +218,7 @@ lambda_summary <- draws %>%
     upper_95 = quantile(lambda, 0.975)
   )
 
-print("系统发育信号 (Lambda/H2) 计算结果：")
+print("Phylogenetic signal (lambda/H2):")
 print(lambda_summary)
 
 ggplot(draws, aes(x = lambda)) +
@@ -408,7 +259,7 @@ m_mechanism_phylo <- brm(
   chains = 4,
   iter = 6000,
   warmup = 2000,
-  cores = 4,
+  cores = 4, seed = 1,
   control = list(
     adapt_delta = 0.99,
     max_treedepth = 15
@@ -433,7 +284,7 @@ m_sensitive <- brm(
   chains = 4,
   iter = 6000,
   warmup = 2000,
-  cores = 4,
+  cores = 4, seed = 1,
   control = list(
     adapt_delta = 0.99,
     max_treedepth = 15
@@ -443,7 +294,7 @@ m_sensitive <- brm(
 summary(m_sensitive)
 
 # Retained vs excluded species
-df_lat_sp$in_bpmm <- df_lat_sp$species %in% df_phylo$species
+df_wb$in_bpmm <- df_wb$species %in% df_phylo$species
 
 t.test(log10(range_km2) ~ in_bpmm, data = df_wb)
 
@@ -461,7 +312,7 @@ m_intercept <- brm(
   chains = 4,
   iter = 6000,
   warmup = 2000,
-  cores = 4,
+  cores = 4, seed = 1,
   control = list(
     adapt_delta = 0.99,
     max_treedepth = 15

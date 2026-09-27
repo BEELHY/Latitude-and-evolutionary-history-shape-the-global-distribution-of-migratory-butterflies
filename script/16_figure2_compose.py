@@ -13,7 +13,7 @@ imgs = [Image.open(PANEL_DIR / f"{n}.png").convert("RGB") for n in names]
 
 w, h = imgs[0].size
 assert all(im.size == (w, h) for im in imgs), "Panels must all be the same size " \
-    "(set consistent width/height in ggsave() in script/19_figure2_panels.R)"
+    "(set consistent width/height in ggsave() in script/15_figure2_panels.R)"
 
 grid_w = w * 2 + GUTTER
 grid_h = h * 2 + GUTTER

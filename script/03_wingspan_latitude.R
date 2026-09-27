@@ -1,7 +1,8 @@
 # Wingspan-latitude models.
+# Run after 01-02, same session
 
 # Libraries
-library(terra)
+library(readr)
 library(dplyr)
 library(stringr)
 library(tidyr)
@@ -13,59 +14,8 @@ library(lmerTest)
 # Import data
 trait_range <- read_csv("output/trait_range.csv")
 
-# Parse raster names
-path <- "data/SuitabilityMaps_MigratorySpecies"
-
-ras_files <- list.files(path, pattern = "^Binary_S[1-4].*", full.names = TRUE, recursive = TRUE)
-
-ras_meta <- tibble(file = ras_files) %>%
-  mutate(stem = tools::file_path_sans_ext(basename(file))) %>%
-  mutate(
-    season  = str_extract(stem, "S[1-4]"),
-    species = str_replace(stem, "^Binary_S[1-4]", "")
-  ) %>%
-  dplyr::select(file, species, season)
-
-# Latitude metrics per raster
-lat_metrics_one <- function(f) {
-  r <- rast(f)
-
-  # Ensure lon/lat
-  if (!is.lonlat(r)) r <- project(r, "EPSG:4326", method = "near")
-
-  occ <- (r == 1)
-  if (global(occ, "sum", na.rm = TRUE)[1, 1] == 0) {
-    return(tibble(mean_lat = NA_real_, mean_abs_lat = NA_real_,
-                  lat_min = NA_real_, lat_max = NA_real_, lat_span = NA_real_))
-  }
-
-  lat <- init(r, "y")
-  a   <- cellSize(r, unit = "km")  # Area weights
-
-  # Occupied area
-  area_total <- global(mask(a, occ, maskvalues = 0), "sum", na.rm = TRUE)[1, 1]
-
-  # Area-weighted means
-  mean_lat     <- global(mask(lat * a, occ, maskvalues = 0), "sum", na.rm = TRUE)[1, 1] / area_total
-  mean_abs_lat <- global(mask(abs(lat) * a, occ, maskvalues = 0), "sum", na.rm = TRUE)[1, 1] / area_total
-
-  # Latitudinal extent
-  lat_min <- global(mask(lat, occ, maskvalues = 0), "min", na.rm = TRUE)[1, 1]
-  lat_max <- global(mask(lat, occ, maskvalues = 0), "max", na.rm = TRUE)[1, 1]
-
-  tibble(
-    mean_lat     = mean_lat,
-    mean_abs_lat = mean_abs_lat,
-    lat_min      = lat_min,
-    lat_max      = lat_max,
-    lat_span     = lat_max - lat_min
-  )
-}
-
-# Latitude for all rasters
-lat_df <- ras_meta %>%
-  mutate(metrics = purrr::map(file, lat_metrics_one)) %>%
-  unnest(metrics) %>%
+# Latitude per species-season
+lat_df <- read_csv("updatedata/species_season_metrics.csv") %>%
   dplyr::select(species, season, mean_lat, mean_abs_lat, lat_min, lat_max, lat_span)
 
 trait_range2 <- trait_range %>%
@@ -86,6 +36,10 @@ df_lat_sp <- trait_range2 %>%
     .groups = "drop"
   ) %>%
   filter(is.finite(abs_lat))
+
+# Save species-level table
+write_csv(df_lat_sp %>% mutate(species = str_replace_all(species, " ", "_")),
+          "output/df_lat_sp.csv")
 
 # Mixed models, family intercept
 m_lat_L <- lmer(log10(WS_L) ~ abs_lat + (1 | Family),
@@ -170,7 +124,7 @@ m_rapoport_with_size_L <- brm(
   chains = 4,
   iter = 6000,
   warmup = 2000,
-  cores = 4,
+  cores = 4, seed = 1,
   control = list(
     adapt_delta = 0.99,
     max_treedepth = 15
@@ -191,7 +145,7 @@ m_rapoport_with_size_U <- brm(
   chains = 4,
   iter = 6000,
   warmup = 2000,
-  cores = 4,
+  cores = 4, seed = 1,
   control = list(
     adapt_delta = 0.99,
     max_treedepth = 15
@@ -263,7 +217,7 @@ m_interact_phylo <- brm(
   chains = 4,
   iter = 6000,
   warmup = 2000,
-  cores = 4,
+  cores = 4, seed = 1,
   control = list(
     adapt_delta = 0.99,
     max_treedepth = 15

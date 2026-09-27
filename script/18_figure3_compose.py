@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # Compose Figure 3.
 
+import os
 from pathlib import Path
 import math
 from PIL import Image, ImageDraw, ImageFont
@@ -9,8 +10,15 @@ import numpy as np
 BASE = Path("output/Manuscript/reproducibility_code")
 BASE_PNG = BASE / "Figure3_base.png"
 OUT_PNG = BASE / "Figure3_final.png"
-IMG_DIR = Path("data/butterfly_family_images")
-FONT_PATH = "/System/Library/Fonts/Supplemental/Arial Bold.ttf"
+IMG_DIR = Path("updatedata/butterfly_family_images")
+# Arial Bold, first found
+FONT_CANDIDATES = [
+    os.environ.get("FIG_FONT", ""),
+    "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+    "/usr/share/fonts/truetype/msttcorefonts/Arial_Bold.ttf",
+    "C:/Windows/Fonts/arialbd.ttf",
+]
+FONT_PATH = next((f for f in FONT_CANDIDATES if f and os.path.exists(f)), None)
 
 # Set3 colours by family
 FAMILY_COLORS = {
@@ -79,7 +87,7 @@ canvas = Image.new("RGBA", (W + 2 * PAD, H + 2 * PAD), (255, 255, 255, 255))
 canvas.paste(img, (PAD, PAD))
 center = (center[0] + PAD, center[1] + PAD)
 
-font = ImageFont.truetype(FONT_PATH, FONT_SIZE_PX)
+font = ImageFont.truetype(FONT_PATH, FONT_SIZE_PX) if FONT_PATH else ImageFont.load_default(FONT_SIZE_PX)
 
 # Histogram in centre
 hist = Image.open(BASE / "Figure3_hist.png").convert("RGBA")

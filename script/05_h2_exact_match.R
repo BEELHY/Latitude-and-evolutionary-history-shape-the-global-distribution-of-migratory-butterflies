@@ -14,25 +14,24 @@ dir.create("output/h2_sensitivity", showWarnings = FALSE, recursive = TRUE)
 log <- function(...) cat(sprintf("[%s] ", format(Sys.time(), "%H:%M:%S")), sprintf(...), "\n", sep = "")
 
 # Base table with covariates
-log("Loading cached checkpoints...")
-final_df   <- readRDS("output/checkpoints/phase1e_bio4.rds")$final_df
-bio15_tbl  <- readRDS("output/checkpoints/mean_bio4_bio15_sp247.rds") %>%
-  dplyr::select(species, season, mean_bio15)
-elev_tbl   <- readRDS("output/checkpoints/mean_elev_sp247.rds") %>%
-  dplyr::select(species, season, mean_elev)
+log("Loading secondary data...")
+metrics <- read_csv("updatedata/species_season_metrics.csv", show_col_types = FALSE)
+tree <- read.tree("updatedata/phylogeny_matched.tre")
 
-df_env <- final_df %>%
-  left_join(bio15_tbl, by = c("species", "season")) %>%
-  left_join(elev_tbl,  by = c("species", "season"))
+df_env <- metrics %>%
+  filter(is.finite(prop_tropics), is.finite(range_km2), range_km2 > 0) %>%
+  group_by(species) %>%
+  mutate(prop_mean = mean(prop_tropics, na.rm = TRUE),
+         prop_within = prop_tropics - prop_mean) %>%
+  ungroup() %>%
+  filter(species %in% tree$tip.label)
 
-stopifnot(nrow(df_env) == nrow(final_df))
 log("Base table: %d obs, %d species; missing bio15=%d, missing elev=%d",
     nrow(df_env), length(unique(df_env$species)),
     sum(is.na(df_env$mean_bio15)), sum(is.na(df_env$mean_elev)))
 
 # Keep species with wingspan
-ws_tbl <- readRDS("output/checkpoints/df_lat_sp_test.rds") %>%
-  mutate(species = str_replace_all(species, " ", "_")) %>%
+ws_tbl <- read_csv("output/df_lat_sp.csv", show_col_types = FALSE) %>%
   dplyr::select(species, WS_L)
 
 df_ws <- df_env %>%
@@ -44,14 +43,12 @@ log("After WS_L + bio15/elev completeness filter: %d obs, %d species (manuscript
     nrow(df_ws), length(unique(df_ws$species)))
 
 # Match type and tree
-matching <- readRDS("output/checkpoints/phase1d_matching.rds")$res_fixed$all_matches_unique
+matching <- read_csv("updatedata/phylogeny_matching.csv", show_col_types = FALSE)
 log("Match types: %s", paste(capture.output(print(table(matching$match_type))), collapse = " | "))
 
 exact_species <- matching %>% filter(match_type == "exact") %>% pull(species)
 log("Exact-match species available: %d", length(exact_species))
 
-tree <- readRDS("output/checkpoints/tree_final_fixed.rds")
-class(tree) <- "phylo"
 dup_idx <- which(duplicated(tree$tip.label))
 if (length(dup_idx) > 0) {
   log("Dropping %d duplicated tip label(s): %s", length(dup_idx),
@@ -142,6 +139,3 @@ log("=== DONE ===")
 print(summary_tbl)
 cat("\nFixed effects, full reconstructed pool:\n"); print(res_full$fixef)
 cat("\nFixed effects, exact-match-only subset:\n"); print(res_exact$fixef)
-cat("\nManuscript-reported reference: H2 = 0.89, 95% CI [0.86, 0.91], N = 783 obs / 207 species\n")
-cat("If Model A's H2 is not close to 0.89, the reconstructed dataset differs from the\n")
-cat("original 'script/05_phylo_bpmm.R' pipeline and Model B should not be trusted as-is.\n")

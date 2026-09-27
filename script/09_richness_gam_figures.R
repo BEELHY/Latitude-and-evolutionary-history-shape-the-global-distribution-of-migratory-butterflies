@@ -7,27 +7,29 @@ library(gratia)  # GAM smooth extraction
 library(patchwork)  # Panel layout
 library(dplyr)  # Data wrangling
 
-cat("\n--- [1/4] 环境就绪，正在加载模型与数据... ---\n")
+dir.create("output/BAM/figures", showWarnings = FALSE, recursive = TRUE)
+
+cat("\n--- [1/4] Loading model and data ---\n")
 
 # Load saved model
-model_final <- readRDS("/Users/hlii0385/Desktop/Phd_Haiyu_LI/Rapoport-s-rule-and-Bergmann-s-rule-of-Migratory-butterflies/output/BAM/output/butterfly_bam_model.rds")
+model_final <- readRDS("output/BAM/output/butterfly_bam_model.rds")
 
 # Load data, land-use factor
-file_path <- "/Users/hlii0385/Desktop/Phd_Haiyu_LI/Rapoport-s-rule-and-Bergmann-s-rule-of-Migratory-butterflies/output/BAM/output/cleaned_data_for_SAR.csv"
+file_path <- "updatedata/richness_grid.csv"
 df_aggressive <- read.csv(file_path)
 df_aggressive$Landuse <- factor(df_aggressive$Landuse)
 df_aggressive$Landuse <- relevel(df_aggressive$Landuse, ref = "cropland")
 
 # Load residual data
-map_data <- read.csv("/Users/hlii0385/Desktop/Phd_Haiyu_LI/Rapoport-s-rule-and-Bergmann-s-rule-of-Migratory-butterflies/output/BAM/output/spatial_residuals_map_data.csv")
+map_data <- read.csv("output/BAM/output/spatial_residuals_map_data.csv")
 
 # Load Moran's I draws
-boot_data <- read.csv("/Users/hlii0385/Desktop/Phd_Haiyu_LI/Rapoport-s-rule-and-Bergmann-s-rule-of-Migratory-butterflies/output/BAM/output/moran_bootstrap_distribution.csv")
+boot_data <- read.csv("output/BAM/output/moran_bootstrap_distribution.csv")
 
-cat("✅ 模型与数据加载成功！\n")
+cat("Loaded.\n")
 
 # Main figure: partial effects
-cat("\n--- [2/4] 正在生成 Main Figure (聚光灯截距平移图)... ---\n")
+cat("\n--- [2/4] Main figure ---\n")
 
 # Smooth terms
 get_smooth_curve <- function(mod, term_name, var_name) {
@@ -128,11 +130,11 @@ main_figure <- ggplot() +
     y = "Partial Effect on Richness (Intercept Shifted)"
   )
 # Save main figure
-ggsave("/Users/hlii0385/Desktop/Phd_Haiyu_LI/Rapoport-s-rule-and-Bergmann-s-rule-of-Migratory-butterflies/Figure_1_Main_Spotlight.pdf", main_figure, width = 10, height = 7, dpi = 300)
-ggsave("/Users/hlii0385/Desktop/Phd_Haiyu_LI/Rapoport-s-rule-and-Bergmann-s-rule-of-Migratory-butterflies/Figure_1_Main_Spotlight.png", main_figure, width = 10, height = 7, dpi = 300, bg = "white")
+ggsave("output/BAM/figures/Figure_1_Main_Spotlight.pdf", main_figure, width = 10, height = 7, dpi = 300)
+ggsave("output/BAM/figures/Figure_1_Main_Spotlight.png", main_figure, width = 10, height = 7, dpi = 300, bg = "white")
 
 # Supplementary figures
-cat("\n--- [3/4] 正在生成 Support Figures (模型诊断与稳健性)... ---\n")
+cat("\n--- [3/4] Supplementary figures ---\n")
 
 # Residual map
 sf1_map <- ggplot(map_data, aes(x = lon, y = lat, color = res)) +
@@ -146,7 +148,7 @@ sf1_map <- ggplot(map_data, aes(x = lon, y = lat, color = res)) +
   theme(legend.position = "right",
         panel.background = element_rect(fill = "aliceblue", color = NA))
 
-ggsave("/Users/hlii0385/Desktop/Phd_Haiyu_LI/Rapoport-s-rule-and-Bergmann-s-rule-of-Migratory-butterflies/Support_Figure_1_Residual_Map.png", sf1_map, width = 12, height = 6, dpi = 300, bg = "white")
+ggsave("output/BAM/figures/Support_Figure_1_Residual_Map.png", sf1_map, width = 12, height = 6, dpi = 300, bg = "white")
 
 # Moran's I distribution
 mean_I <- mean(boot_data$Moran_I)
@@ -167,7 +169,7 @@ sf2_moran <- ggplot(boot_data, aes(x = Moran_I)) +
            label = "Mean", vjust = -0.5, color = "#cb181d") +
   coord_cartesian(clip = "off")
 
-ggsave("/Users/hlii0385/Desktop/Phd_Haiyu_LI/Rapoport-s-rule-and-Bergmann-s-rule-of-Migratory-butterflies/Support_Figure_2_Moran_Distribution.png", sf2_moran, width = 8, height = 6, dpi = 300, bg = "white")
+ggsave("output/BAM/figures/Support_Figure_2_Moran_Distribution.png", sf2_moran, width = 8, height = 6, dpi = 300, bg = "white")
 
 # Spatial smooth surface
 sf3_spatial_smooth <- draw(model_final, select = "s(lon,lat)") +
@@ -177,6 +179,6 @@ sf3_spatial_smooth <- draw(model_final, select = "s(lon,lat)") +
        subtitle = "Based on s(lon, lat, bs='ds', k=1500)",
        x = "Longitude", y = "Latitude")
 
-ggsave("/Users/hlii0385/Desktop/Phd_Haiyu_LI/Rapoport-s-rule-and-Bergmann-s-rule-of-Migratory-butterflies/Support_Figure_3_Spatial_Smooth.png", sf3_spatial_smooth, width = 10, height = 6, dpi = 300, bg = "white")
+ggsave("output/BAM/figures/Support_Figure_3_Spatial_Smooth.png", sf3_spatial_smooth, width = 10, height = 6, dpi = 300, bg = "white")
 
-cat("\n--- [4/4] 恭喜！所有高清图表 (PDF/PNG) 均已成功生成并保存在指定目录中！ ---\n")
+cat("\n--- [4/4] Done ---\n")
