@@ -6,8 +6,8 @@ or files written by earlier scripts into `output/`. Run everything from the proj
 
 ## Run order
 
-| Script | Purpose | Main output |
-|---|---|---|
+| Script | Purpose | 
+|---|---|
 | 01_range_tropics.R | Range size vs tropicality; phylogenetic models | 
 | 02_wingspan_traits.R | Join wingspan and range |
 | 03_wingspan_latitude.R | Wingspan vs latitude; interaction models | 
