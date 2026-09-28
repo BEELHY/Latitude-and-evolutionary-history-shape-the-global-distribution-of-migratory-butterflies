@@ -15,6 +15,9 @@ range <- read_csv("updatedata/species_season_metrics.csv") %>%
 
 # Wrangle data
 colnames(migr_trait)[1] <- "species"
+migr_trait <- migr_trait %>%
+  arrange(species, is.na(WS_L) & is.na(WS_U)) %>%
+  distinct(species, .keep_all = TRUE)  # One row per species
 range <- range %>%
   mutate(species = str_replace_all(species, "_", " "))
 
