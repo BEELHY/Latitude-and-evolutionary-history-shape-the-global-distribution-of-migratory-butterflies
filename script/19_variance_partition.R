@@ -69,8 +69,16 @@ vp <- parts %>%
   summarise(mean = mean(prop), lo = quantile(prop, 0.025), hi = quantile(prop, 0.975), .groups = "drop")
 print(vp)
 
+# Environment vs phylogeny
+dd <- parts$Environment - parts$Phylogeny
+env_vs_phy <- data.frame(diff_mean = mean(dd), lo = quantile(dd, 0.025), hi = quantile(dd, 0.975),
+                         p_phy_ge_env = mean(parts$Phylogeny >= parts$Environment),
+                         ratio_median = median(parts$Phylogeny / parts$Environment))
+print(env_vs_phy)
+
 dir.create("output/phylo_export", showWarnings = FALSE, recursive = TRUE)
 write_csv(vp, "output/phylo_export/variance_partition.csv")
+write_csv(env_vs_phy, "output/phylo_export/environment_vs_phylogeny.csv")
 fe <- as.data.frame(fixef(m_int)); fe$term <- rownames(fe)
 write_csv(fe, "output/phylo_export/integrated_model_fixef.csv")
 cat(sprintf("Max Rhat: %.3f\n", max(brms::rhat(m_int), na.rm = TRUE)))
