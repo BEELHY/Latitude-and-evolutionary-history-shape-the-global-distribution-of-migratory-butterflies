@@ -20,13 +20,14 @@ or files written by earlier scripts into `output/`. Run everything from the proj
 | 10_nri_nti_data.R | NRI/NTI per 1° cell and model data | output/phylo_export/ |
 | 11_richness_gam_linear.R | Linear-covariate GAMs with spatial smooth | output/phylo_export/ |
 | 12_forest_data.R | Forest plot data, built-up reference | output/phylo_export/ |
-| 13_region_hotspots.R | Hotspot metrics by region | output/region_comparison/ |
-| 14_realm_hotspots.R | Hotspot metrics by zoogeographic realm | output/region_comparison/ |
+| 13_realm_area_s2.py | Equal-area richness and high-richness (≥10 species) area by zoogeographic realm; Fig. S2 | output/realm_area/ |
+| 14_figure1_panels.py | Figure 1 panels (Robinson maps, latitude profile, colour bars); assembled manually | output/Manuscript/figure1_panels/ |
 | 15_figure2_panels.R, 16_figure2_compose.py | Figure 2 | output/Manuscript/reproducibility_code/ |
 | 17_figure3_panels.R, 18_figure3_compose.py | Figure 3 | output/Manuscript/reproducibility_code/ |
 
 - 01–04 run in one R session, in order (02–04 reuse objects created by 01).
 - 08 needs a large-memory node (see SBATCH header); copy `output/BAM/output/` back before running 09.
+- 13 and 14 are the only scripts that read the raw seasonal suitability maps (Chowdhury et al. 2021, *Ecology Letters*), which are not redistributed here; they also need the CMEC zoogeographic regions (Holt et al. 2013) and a world boundaries shapefile. Their realm-level output is provided as `updatedata/realm_area_hotspot_summary.csv`.
 - All other scripts run standalone once their inputs exist.
 - Bayesian models use `seed = 1`; other random steps use `set.seed(1)`.
 
@@ -37,4 +38,4 @@ ggeffects, ggimage, ggnewscale, ggplot2, ggtree, ggtreeExtra, gratia, knitr, lme
 MuMIn, patchwork, performance, phytools, picante, png, purrr, ragg, readr, spdep, stringr, tibble,
 tidybayes, tidyr, tidyverse, viridis.
 
-Python 3 with: Pillow, numpy.
+Python 3 with: Pillow, numpy, pandas, matplotlib, seaborn, geopandas, rasterio, cartopy, tqdm.
