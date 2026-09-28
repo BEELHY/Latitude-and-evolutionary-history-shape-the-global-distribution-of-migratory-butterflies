@@ -29,7 +29,8 @@ moran_report <- function(mod, label) {
 # Main: global richness
 cat("\n=== MAIN: A_lin_sm, global richness (Richness_full) ===\n")
 m_A <- fit_gam(
-  Richness_full ~ Bio_4 + Bio_15 + Elevation + HII + Landuse + s(lon1, lat1, k = SPATIAL_K),
+  Richness_full ~ Bio_4 + Bio_15 + Elevation + HII + Landuse + s(lon1, lat1, k = SPATIAL_K) +
+    offset(log(n_fine_cells)),  # Per 2.5-arcmin cell
   model_df)
 print(summary(m_A))
 moran_report(m_A, "A_lin_sm (global, main)")

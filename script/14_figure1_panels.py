@@ -143,8 +143,8 @@ plt.close()
 fig_c, axes_c = plt.subplots(2, 2, figsize=(18, 12),
                              subplot_kw={'projection': proj_robinson},
                              gridspec_kw={'hspace': 0.12, 'wspace': 0.05})
-v_lim = np.percentile(np.abs(S[3] - S[2]), 99.5)
 labels = [("S2–S1", S[2] - S[1]), ("S3–S2", S[3] - S[2]), ("S4–S3", S[4] - S[3]), ("S1–S4", S[1] - S[4])]
+v_lim = max(np.abs(d).max() for _, d in labels)  # Full range, no clipping
 for i, (label, data) in enumerate(labels):
     ax = axes_c.flatten()[i]
     ax.set_global()
@@ -178,6 +178,6 @@ def export_c_colorbar(v_range, ticks, suffix):
     plt.close()
 
 
-export_c_colorbar(18, [-18, -12, -6, 0, 6, 12, 18], "pm18")
-export_c_colorbar(31, [-31, -20, -10, 0, 10, 20, 31], "pm31")
+v_int = int(v_lim)
+export_c_colorbar(v_int, [-v_int, -20, -10, 0, 10, 20, v_int], f"pm{v_int}")
 print(f"Panels saved to {output_dir}; assembled manually.")
