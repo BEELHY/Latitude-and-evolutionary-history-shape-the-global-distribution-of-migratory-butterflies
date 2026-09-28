@@ -127,11 +127,11 @@ grid::grid.draw(legend_grob)
 dev.off()
 p_iter <- p_iter + theme(legend.position = "none")
 
-# Histogram, outlier excluded
-p_hist <- ggplot(df_plot_final %>% dplyr::filter(Range_Val > 5.5), aes(x = Range_Val)) +
+# Histogram, all species
+p_hist <- ggplot(df_plot_final, aes(x = Range_Val)) +
   geom_histogram(aes(fill = after_stat(x)), bins = 30, color = "white", show.legend = FALSE) +
   scale_fill_viridis_c(option = "plasma") +
-  labs(x = expression(log[10] * " range (" * km^2 * ")"), y = "Density") +
+  labs(x = expression(log[10] * " range (" * km^2 * ")"), y = "Species") +
   theme_minimal(base_size = BASE_SIZE) +
   theme(panel.background = element_blank(), plot.background = element_blank(),
         panel.grid.major = element_blank(), panel.grid.minor = element_blank(),

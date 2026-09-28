@@ -168,6 +168,14 @@ anova(m_pattern,m_pattern_lat)
 
 # m_pattern fits better
 
+# Additive models, no interaction
+m_add_L <- lmer(log10(range_km2) ~ abs_lat + log10(WS_L) + prop_within + season + (1 | species),
+                data = final_df_lat %>% filter(is.finite(WS_L), WS_L > 0))
+m_add_U <- lmer(log10(range_km2) ~ abs_lat + log10(WS_U) + prop_within + season + (1 | species),
+                data = final_df_lat %>% filter(is.finite(WS_U), WS_U > 0))
+summary(m_add_L)
+summary(m_add_U)
+
 # Range per wingspan ratio
 
 final_df_lat <- final_df_lat %>%

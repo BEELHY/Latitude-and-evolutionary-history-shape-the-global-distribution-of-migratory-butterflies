@@ -108,8 +108,8 @@ p2b <- ggplot() +
 m_interact <- lmer(log10(range_km2) ~ abs_lat * log10(WS_L) + prop_within + season + (1 | species),
                     data = final_df_lat)
 
-lat_vals <- c(0, 18.2, 40, 60)
-pred_c <- predict_response(m_interact, terms = c("WS_L [n=50]", "abs_lat [0,18.2,40,60]"),
+lat_vals <- c(0, 20, 40, 60)
+pred_c <- predict_response(m_interact, terms = c("WS_L [n=50]", "abs_lat [0,20,40,60]"),
                             back_transform = FALSE) %>%
   as_tibble() %>%
   rename(WS_L = x, fit = predicted) %>%

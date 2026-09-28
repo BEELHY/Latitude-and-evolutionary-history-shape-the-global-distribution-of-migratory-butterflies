@@ -37,15 +37,11 @@ df_wb <- df_ss %>%
   ) %>%
   ungroup()
 
-# 377 species with wingspan
-log("PHASE 1b: sp_377 (426 -> 377)")
-
+# Species with wingspan data
+log("PHASE 1b: species with wingspan data")
 trait_range <- read_csv("output/trait_range.csv", show_col_types = FALSE)
-
-# Standardise species name format
-trait_range_u <- trait_range %>% mutate(species = str_replace_all(species, " ", "_"))
-
-trait_sp <- trait_range_u %>%
+trait_sp <- trait_range %>%
+  mutate(species = str_replace_all(species, " ", "_")) %>%
   group_by(species) %>%
   summarise(
     Family = dplyr::first(Family[!is.na(Family)]),
@@ -53,123 +49,26 @@ trait_sp <- trait_range_u %>%
     WS_U   = dplyr::first(WS_U[!is.na(WS_U)]),
     .groups = "drop"
   )
+sp_ws <- trait_sp %>% filter((is.finite(WS_L) & WS_L > 0) | (is.finite(WS_U) & WS_U > 0)) %>% pull(species) %>% sort()
+log("sp_ws: %d species (upper %d, lower %d)", length(sp_ws),
+    sum(is.finite(trait_sp$WS_U) & trait_sp$WS_U > 0), sum(is.finite(trait_sp$WS_L) & trait_sp$WS_L > 0))
 
-# Wingspan-presence candidates
-cand_WS_L_notna <- trait_sp %>% filter(!is.na(WS_L)) %>% pull(species)
-cand_WS_U_notna <- trait_sp %>% filter(!is.na(WS_U)) %>% pull(species)
-cand_WS_both_notna <- trait_sp %>% filter(!is.na(WS_L), !is.na(WS_U)) %>% pull(species)
-cand_WS_either_notna <- trait_sp %>% filter(!is.na(WS_L) | !is.na(WS_U)) %>% pull(species)
-cand_WS_both_pos <- trait_sp %>% filter(is.finite(WS_L), WS_L > 0, is.finite(WS_U), WS_U > 0) %>% pull(species)
-cand_WS_either_pos <- trait_sp %>% filter((is.finite(WS_L) & WS_L > 0) | (is.finite(WS_U) & WS_U > 0)) %>% pull(species)
-
-log("WS-based candidates on sp_426 -- WS_L notna=%d, WS_U notna=%d, both notna=%d, either notna=%d, both>0=%d, either>0=%d (target 377; none expected to match)",
-    length(cand_WS_L_notna), length(cand_WS_U_notna), length(cand_WS_both_notna), length(cand_WS_either_notna),
-    length(cand_WS_both_pos), length(cand_WS_either_pos))
-
-# Replicate script 02 filter
-df_sp_trait_check <- trait_range_u %>%
-  group_by(species, Family) %>%
-  summarise(prop_mean = mean(prop_tropics, na.rm = TRUE), .groups = "drop")
-n_split_species <- df_sp_trait_check %>% count(species) %>% filter(n > 1) %>% nrow()
-log("species split across >1 (species,Family) group: %d (0 = no double counting)", n_split_species)
-
-df_sp_trait <- trait_range_u %>%
-  group_by(species, Family) %>%
-  summarise(
-    prop_mean = mean(prop_tropics, na.rm = TRUE),
-    range_km2 = mean(range_km2, na.rm = TRUE),
-    WS_L = dplyr::first(WS_L[!is.na(WS_L)]),
-    WS_U = dplyr::first(WS_U[!is.na(WS_U)]),
-    .groups = "drop"
-  ) %>%
-  filter(is.finite(prop_mean))
-
-cand_prop_mean_filter <- sort(unique(df_sp_trait$species))
-log("Candidate 'df_sp_trait prop_mean filter' (script/02_wingspan_traits.R, replicated exactly): n=%d (target 377)", length(cand_prop_mean_filter))
-log("  of these, WS_L present: %d, WS_U present: %d, both present: %d (i.e. NOT all 377 have complete wingspan data)",
-    sum(!is.na(df_sp_trait$WS_L)), sum(!is.na(df_sp_trait$WS_U)), sum(!is.na(df_sp_trait$WS_L) & !is.na(df_sp_trait$WS_U)))
-
-target_377 <- 377
-cands_377 <- list(
-  WS_L_notna = cand_WS_L_notna, WS_U_notna = cand_WS_U_notna,
-  WS_both_notna = cand_WS_both_notna, WS_either_notna = cand_WS_either_notna,
-  WS_both_pos = cand_WS_both_pos, WS_either_pos = cand_WS_either_pos,
-  prop_mean_filter = cand_prop_mean_filter
-)
-sizes_377 <- sapply(cands_377, length)
-log("ALL sp_377 candidate sizes: %s", paste(names(sizes_377), sizes_377, sep = "=", collapse = ", "))
-match_377 <- names(cands_377)[sizes_377 == target_377]
-
-def_377_key <- if (length(match_377) >= 1) match_377[1] else names(sizes_377)[which.min(abs(sizes_377 - target_377))]
-sp_377 <- sort(cands_377[[def_377_key]])
-def_377 <- if (def_377_key == "prop_mean_filter") {
-  "script/02_wingspan_traits.R's df_sp_trait construction: group_by(species, Family) %>% summarise(prop_mean = mean(prop_tropics, na.rm=TRUE), ...) %>% filter(is.finite(prop_mean)) -- drops 49 of 426 species whose prop_tropics is NA in every season row (an upstream data-quality issue in the range metrics, unrelated to wingspan availability). Reproduces 377 exactly; within this set 316 species have both WS_L and WS_U. No WS-presence-based candidate reproduces 377 under any tested variant (NA-based, >0-based, with/without Family, top-5-family-restricted)."
-} else {
-  sprintf("No exact match found; closest WS-based candidate '%s' adopted.", def_377_key)
-}
-log("ADOPTED sp_377 definition [%s]: n=%d (target 377)", def_377_key, length(sp_377))
-
-n_fam_377 <- length(unique(trait_sp$Family[trait_sp$species %in% sp_377 & !is.na(trait_sp$Family)]))
-log("distinct families among sp_377: %d (manuscript says 5)", n_fam_377)
-
-# 247 phylogeny-matched species
-log("PHASE 1c: sp_247 (phylogeny-matched species)")
-
+# Phylogeny-matched species
+log("PHASE 1c: phylogeny-matched species")
 matching   <- read_csv("updatedata/phylogeny_matching.csv", show_col_types = FALSE)
 tree_final <- ape::read.tree("updatedata/phylogeny_matched.tre")
-log("exact_matches: %d, genus_proxy matches: %d",
-    sum(matching$match_type == "exact"), sum(matching$match_type == "genus_proxy"))
-log("raw tree_final$tip.label length: %d (target 247)", length(tree_final$tip.label))
+sp_247 <- sort(intersect(unique(tree_final$tip.label), sp_426))
+sp_ws_phy <- sort(intersect(sp_ws, sp_247))
+log("sp_247: %d; with wingspan: %d", length(sp_247), length(sp_ws_phy))
 
-# Count unique species
-dup_tip_labels <- tree_final$tip.label[duplicated(tree_final$tip.label)]
-if (length(dup_tip_labels) > 0) {
-  log("duplicate tip label(s) causing the 248-vs-247 raw-vector discrepancy: %s", paste(unique(dup_tip_labels), collapse = ", "))
-}
-
-df_phylo <- df_wb %>% filter(species %in% tree_final$tip.label) %>% mutate(species = factor(species))
-sp_247 <- sort(unique(as.character(df_phylo$species)))
-log("sp_247 = unique(df_phylo$species) (post-fix): n=%d (manuscript target: 247)", length(sp_247))
-
-
-# Nesting check
-log("PHASE 1d: nesting check across sp_247 / sp_377 / sp_426")
-nest_247_377 <- setdiff(sp_247, sp_377)
-nest_377_426 <- setdiff(sp_377, sp_426)
-log("sp_247 not in sp_377: %d", length(nest_247_377))
-log("sp_377 not in sp_426: %d (should be 0, sp_377 built from sp_426's trait_range.csv pool)", length(nest_377_426))
-nesting_ok <- (length(nest_247_377) == 0) && (length(nest_377_426) == 0)
-log("STRICT NESTING HOLDS: %s", nesting_ok)
-
-# Save subsets and notes
-saveRDS(list(sp_426 = sp_426, sp_377 = sp_377, sp_247 = sp_247), "output/subsets.rds")
-
-notes <- c(
-  "Species-subset definitions used to build output/subsets.rds, output/TableS1_attrition.csv, output/TableS2_nested.csv",
-  "Generated by script/06_attrition_tables.R.",
-  "",
-  "FUNNEL: 568 (migratory species list) -> 426 -> 377 -> 247.",
-  "",
-  sprintf("sp_426 (n=%d, target 426): unique species with a seasonal suitability map (updatedata/species_season_metrics.csv).", length(sp_426)),
-  "",
-  sprintf("sp_377 (n=%d, target 377): %s", length(sp_377), def_377),
-  sprintf("  Full candidate sizes tested (all applied directly to sp_426, no intermediate pool): %s.",
-          paste(names(sizes_377), sizes_377, sep = "=", collapse = ", ")),
-  sprintf("  Species split across >1 (species,Family) group when replicating script/02_wingspan_traits.R's df_sp_trait group_by(species,Family): %d (0 = no species double-counted).", n_split_species),
-  sprintf("  Note: within sp_377, WS_L is present for %d species and WS_U for %d (of 377); WS-presence subsets would give WS_L/both=%d, WS_U/either=%d.",
-          sum(!is.na(df_sp_trait$WS_L)), sum(!is.na(df_sp_trait$WS_U)), length(cand_WS_both_pos), length(cand_WS_either_pos)),
-  "",
-  sprintf("sp_247 (n=%d, target 247): unique(df_phylo$species), i.e. distinct species names in tree_final$tip.label -- NOT the raw length of tree_final$tip.label (which is %d). Evidence: script/01_range_tropics.R counts length(unique(df_phylo$species)) = 247. The raw vector is one longer because two different phylogeny tips (%s) both regex-extracted to the same species label, producing a duplicated tip label; %%in%% membership testing is unaffected by that duplicate, so sp_247 comes out at exactly 247 once counted correctly. This is a deliberate substitution of 'unique(df_phylo$species)' for the literal 'tree_final$tip.label', matching both the script's own annotation and the manuscript's target number.",
-          length(sp_247), length(tree_final$tip.label), paste(unique(dup_tip_labels), collapse = ", ")),
-  sprintf("  Matching: %d exact, %d genus-proxy tips (updatedata/phylogeny_matching.csv).",
-          sum(matching$match_type == "exact"), sum(matching$match_type == "genus_proxy")),
-  "",
-  sprintf("Nesting check: sp_247 subset of sp_377: %s | sp_377 subset of sp_426: %s",
-          length(nest_247_377) == 0, length(nest_377_426) == 0),
-  if (length(nest_247_377) > 0) sprintf("  NOTE: %d sp_247 species are NOT in sp_377 -- phylogenetic tree-matching draws from the full sp_426 pool independent of the df_sp_trait/prop_mean-filter step, so sp_247 is not guaranteed to nest inside sp_377. Table S1's 377->247 row uses the plain set difference regardless.", length(nest_247_377)) else NULL
-)
-writeLines(notes[!sapply(notes, is.null)], "output/subsets_methodology_notes.txt")
-log("saved output/subsets.rds and output/subsets_methodology_notes.txt")
+saveRDS(list(sp_426 = sp_426, sp_ws = sp_ws, sp_247 = sp_247, sp_ws_phy = sp_ws_phy), "output/subsets.rds")
+writeLines(c(
+  "Species subsets (script/06_attrition_tables.R)",
+  sprintf("568 migratory species -> %d with seasonal suitability maps", length(sp_426)),
+  sprintf("-> %d with wingspan data (upper or lower)", length(sp_ws)),
+  sprintf("-> %d with wingspan data and matched to the phylogeny (%d exact, %d congeneric tips overall)",
+          length(sp_ws_phy), sum(matching$match_type == "exact"), sum(matching$match_type == "genus_proxy"))
+), "output/subsets_methodology_notes.txt")
 
 # Table S1: attrition tests
 log("PHASE 2: building Table S1 (stepwise attrition)")
@@ -188,7 +87,7 @@ master_cov <- out %>%
   left_join(lat_df %>% group_by(species) %>% summarise(abs_lat = mean(mean_abs_lat, na.rm = TRUE), .groups = "drop"), by = "species") %>%
   left_join(trait_sp %>% dplyr::select(species, Family), by = "species")
 
-log("master_cov: %d species (target 426), %d with finite prop_mean (target 377), %d with Family assigned",
+log("master_cov: %d species, %d with finite prop_mean, %d with Family assigned",
     nrow(master_cov), sum(is.finite(master_cov$prop_mean)), sum(!is.na(master_cov$Family)))
 
 fmt_cell <- function(retained_vals, excluded_vals) {
@@ -240,8 +139,8 @@ row1 <- tibble(`Filtering step` = "568 (migratory species list) -> 426 (with sui
                Retained = 426L, Excluded = 142L,
                abs_lat = "not assessable", prop_mean = "not assessable", `log10(range_km2)` = "not assessable",
                `Family composition P` = NA_character_)
-row2 <- build_step_row("426 (suitability maps) -> 377 (df_sp_trait / prop_mean complete)", sp_377, setdiff(sp_426, sp_377))
-row3 <- build_step_row("377 -> 247 (phylogenetically matched)", sp_247, setdiff(sp_377, sp_247))
+row2 <- build_step_row("426 (suitability maps) -> wingspan data", sp_ws, setdiff(sp_426, sp_ws))
+row3 <- build_step_row("wingspan data -> phylogenetically matched", sp_ws_phy, setdiff(sp_ws, sp_ws_phy))
 
 table_s1 <- bind_rows(row1, row2, row3)
 write_csv(table_s1, "output/TableS1_attrition.csv")
@@ -284,8 +183,8 @@ fmt_est <- function(est, lwr, upr) sprintf("%.3f [%.3f, %.3f]", est, lwr, upr)
 fmt_rev <- function(est, lwr, upr) sprintf("%.1f° [%.1f°, %.1f°]", est, lwr, upr)
 
 subset_specs <- list(
-  list(label = "Wingspan-complete (n=377)", sp = sp_377),
-  list(label = "Phylogeny-matched (n=247)", sp = sp_247)
+  list(label = "Wingspan data", sp = sp_ws),
+  list(label = "Wingspan data, phylogeny-matched", sp = sp_ws_phy)
 )
 
 s2_rows <- purrr::map(subset_specs, function(spec) {
