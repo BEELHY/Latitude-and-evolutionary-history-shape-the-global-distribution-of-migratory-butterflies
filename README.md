@@ -1,9 +1,6 @@
 # Analysis code
 
 Code for the analyses and figures of the manuscript on the macroecology of migratory butterflies.
-All scripts read secondary data from `updatedata/` (available from the authors / data repository)
-or files written by earlier scripts into `output/`. Run everything from the project root.
-
 ## Run order
 
 | Script | Purpose | 
