@@ -21,6 +21,7 @@ Code for the analyses and figures of the manuscript on the macroecology of migra
 | 14_figure1_panels.py | Figure 1 panels (Robinson maps, latitude profile, colour bars) | 
 | 15_figure2_panels.R, 16_figure2_compose.py | Figure 2 | 
 | 17_figure3_panels.R, 18_figure3_compose.py | Figure 3 | 
+| 19_variance_partition.R | Integrated model and variance partitioning | 
 
 - 01–04 run in one R session, in order (02–04 reuse objects created by 01).
 - 08 needs a large-memory node (see SBATCH header); copy `output/BAM/output/` back before running 09.

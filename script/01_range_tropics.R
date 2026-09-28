@@ -175,14 +175,15 @@ print(paste("final species", length(unique(df_phylo$species))))
 
 # Phylogenetic covariance matrix
 if(!is.ultrametric(tree_final)) tree_final <- phytools::force.ultrametric(tree_final)
-A <- vcv.phylo(tree_final)
+A <- vcv.phylo(drop.tip(tree_final, which(duplicated(tree_final$tip.label))))
+A <- A / max(diag(A))  # Correlation scale
 
 # Phylogenetic model
 m_rapoport_optimized <- brm(
   log10(range_km2) ~ prop_mean+prop_within_z + season +
-    (1 | gr(species_phylo, dist = "gaussian")),
+    (1 | gr(species_phylo, cov = A)) + (1 | species),
   data = df_phylo_scaled,
-  data2 = list(species_phylo = A),
+  data2 = list(A = A),
   family = gaussian(),
   prior = c(
     prior(normal(0, 1), class = "b"),
@@ -207,8 +208,9 @@ draws <- as.data.frame(m_rapoport_optimized)
 draws <- draws %>%
   mutate(
     var_phylo = sd_species_phylo__Intercept^2,
+    var_sp = sd_species__Intercept^2,
     var_res = sigma^2,
-    lambda = var_phylo / (var_phylo + var_res)
+    lambda = var_phylo / (var_phylo + var_sp + var_res)  # H2
   )
 lambda_summary <- draws %>%
   summarise(
@@ -247,9 +249,9 @@ m_mechanism_subset_z <- lmer(log10(range_km2) ~ mean_bio4_z + prop_within_z + se
 
 m_mechanism_phylo <- brm(
   log10(range_km2) ~ mean_bio4_z + prop_within_z + season +
-    (1 | gr(species_phylo, dist = "gaussian")),
+    (1 | gr(species_phylo, cov = A)) + (1 | species),
   data = df_phylo_scaled,
-  data2 = list(species_phylo = A),
+  data2 = list(A = A),
   family = gaussian(),
   prior = c(
     prior(normal(0, 1), class = "b"),
@@ -272,9 +274,9 @@ summary(m_mechanism_phylo)
 
 m_sensitive <- brm(
   log10(range_km2) ~  season +
-    (1 | gr(species_phylo, dist = "gaussian")),
+    (1 | gr(species_phylo, cov = A)) + (1 | species),
   data = df_phylo_scaled,
-  data2 = list(species_phylo = A),
+  data2 = list(A = A),
   family = gaussian(),
   prior = c(
     prior(normal(0, 1), class = "b"),
@@ -300,9 +302,9 @@ t.test(log10(range_km2) ~ in_bpmm, data = df_wb)
 
 # Intercept-only model
 m_intercept <- brm(
-  formula = log10(range_km2) ~ 1 + (1 | gr(species_phylo, dist = "gaussian")),
+  formula = log10(range_km2) ~ 1 + (1 | gr(species_phylo, cov = A)) + (1 | species),
   data = df_phylo_scaled,
-  data2 = list(species_phylo = A),
+  data2 = list(A = A),
   family = gaussian(),
   prior = c(
     prior(normal(0, 1), class = "Intercept"),

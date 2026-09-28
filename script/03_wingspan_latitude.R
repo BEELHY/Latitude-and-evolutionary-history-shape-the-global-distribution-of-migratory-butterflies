@@ -112,9 +112,9 @@ cat("WS_U:", length(unique(df_model_WS_U$species)), "\n")
 
 m_rapoport_with_size_L <- brm(
   log10(range_km2) ~ mean_bio4_z + prop_within_z + log_WS_L_z + season +
-    (1 | gr(species_phylo, dist = "gaussian")),
+    (1 | gr(species_phylo, cov = A)) + (1 | species),
   data = df_model_WS_L,
-  data2 = list(species_phylo = A),
+  data2 = list(A = A),
   family = gaussian(),
   prior = c(
     prior(normal(0, 1), class = "b"),
@@ -133,9 +133,9 @@ m_rapoport_with_size_L <- brm(
 
 m_rapoport_with_size_U <- brm(
   log10(range_km2) ~ mean_bio4_z + prop_within_z + log_WS_U_z + season +
-    (1 | gr(species_phylo, dist = "gaussian")),
+    (1 | gr(species_phylo, cov = A)) + (1 | species),
   data = df_model_WS_U,
-  data2 = list(species_phylo = A),
+  data2 = list(A = A),
   family = gaussian(),
   prior = c(
     prior(normal(0, 1), class = "b"),
@@ -213,9 +213,9 @@ m_interact_subset_z <- lmer(log10(range_km2) ~ abs_lat_z * log_WS_U_z + prop_wit
 
 m_interact_phylo <- brm(
   log10(range_km2) ~ abs_lat_z * log_WS_U_z + prop_within_z + season +
-    (1 | gr(species_phylo, dist = "gaussian")),
+    (1 | gr(species_phylo, cov = A)) + (1 | species),
   data = df_model_WS_U_lat,
-  data2 = list(species_phylo = A),
+  data2 = list(A = A),
   family = gaussian(),
   prior = c(
     prior(normal(0, 1), class = "b"),

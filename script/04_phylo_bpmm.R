@@ -66,9 +66,9 @@ df_model_WS_U <- df_combined %>%
 m_combined_phylo_L <- brm(
   log10(range_km2) ~ mean_bio4_z + mean_bio15_z + mean_elev_z +
     prop_within_z + log_WS_L_z + season +
-    (1 | gr(species_phylo, dist = "gaussian")),
+    (1 | gr(species_phylo, cov = A)) + (1 | species),
   data = df_model_WS_L,
-  data2 = list(species_phylo = A),
+  data2 = list(A = A),
   family = gaussian(),
   prior = c(
     prior(normal(0, 1), class = "b"),
@@ -82,9 +82,9 @@ m_combined_phylo_L <- brm(
 m_combined_phylo_U <- brm(
   log10(range_km2) ~ mean_bio4_z + mean_bio15_z + mean_elev_z +
     prop_within_z + log_WS_U_z + season +
-    (1 | gr(species_phylo, dist = "gaussian")),
+    (1 | gr(species_phylo, cov = A)) + (1 | species),
   data = df_model_WS_U,
-  data2 = list(species_phylo = A),
+  data2 = list(A = A),
   family = gaussian(),
   prior = c(
     prior(normal(0, 1), class = "b"),
@@ -98,9 +98,9 @@ m_combined_phylo_U <- brm(
 m_combined_phylo <- brm(
   log10(range_km2) ~ mean_bio4_z + mean_bio15_z + mean_elev_z +
     prop_within_z + season +
-    (1 | gr(species_phylo, dist = "gaussian")),
+    (1 | gr(species_phylo, cov = A)) + (1 | species),
   data = df_model_WS_L,
-  data2 = list(species_phylo = A),
+  data2 = list(A = A),
   family = gaussian(),
   prior = c(
     prior(normal(0, 1), class = "b"),

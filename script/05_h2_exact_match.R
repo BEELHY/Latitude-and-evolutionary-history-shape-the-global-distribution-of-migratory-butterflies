@@ -60,7 +60,8 @@ stopifnot(!any(duplicated(tree$tip.label)))
 build_A <- function(species_subset) {
   t <- keep.tip(tree, intersect(tree$tip.label, species_subset))
   if (!is.ultrametric(t)) t <- phytools::force.ultrametric(t)
-  vcv.phylo(t)
+  v <- vcv.phylo(t)
+  v / max(diag(v))  # Correlation scale
 }
 
 fit_bpmm <- function(data, A, label) {
@@ -79,9 +80,9 @@ fit_bpmm <- function(data, A, label) {
 
   mod <- brm(
     log10(range_km2) ~ mean_bio4_z + mean_bio15_z + mean_elev_z + prop_within_z + season +
-      (1 | gr(species_phylo, dist = "gaussian")),
+      (1 | gr(species_phylo, cov = A)) + (1 | species),
     data = data,
-    data2 = list(species_phylo = A),
+    data2 = list(A = A),
     family = gaussian(),
     prior = c(
       prior(normal(0, 1), class = "b"),
@@ -95,7 +96,7 @@ fit_bpmm <- function(data, A, label) {
 
   draws <- as_draws_df(mod)
   lambda <- draws$sd_species_phylo__Intercept^2 /
-    (draws$sd_species_phylo__Intercept^2 + draws$sigma^2)
+    (draws$sd_species_phylo__Intercept^2 + draws$sd_species__Intercept^2 + draws$sigma^2)
 
   list(
     label = label,
