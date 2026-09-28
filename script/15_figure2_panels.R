@@ -100,7 +100,7 @@ p2b <- ggplot() +
   geom_line(data = df_preds2b, aes(x = abs_lat, y = log10_WS, color = WS_type), linewidth = 1.2) +
   scale_color_manual(values = c("Lower" = "#56B4E9", "Upper" = "#D55E00")) +
   scale_fill_manual(values = c("Lower" = "#56B4E9", "Upper" = "#D55E00")) +
-  labs(x = "Absolute latitude (°)", y = expression(log[10] * " Wingspan (mm)"),
+  labs(x = "Absolute latitude (°)", y = expression(log[10] * " Wingspan (cm)"),
        color = "Wingspan", fill = "Wingspan") +
   theme_fig2
 
@@ -121,7 +121,7 @@ p2c <- ggplot(pred_c, aes(x = WS_L, y = fit, color = lat_group, fill = lat_group
   scale_x_log10() +
   scale_color_viridis_d(option = "viridis") +
   scale_fill_viridis_d(option = "viridis") +
-  labs(x = "Wingspan (log10 mm)",
+  labs(x = "Wingspan (log10 cm)",
        y = expression(log[10] * " Range size (" * km^2 * ")"),
        color = "Absolute\nlatitude", fill = "Absolute\nlatitude") +
   theme_fig2
