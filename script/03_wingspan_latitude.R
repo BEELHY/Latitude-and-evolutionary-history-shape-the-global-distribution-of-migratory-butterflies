@@ -235,3 +235,37 @@ m_interact_phylo <- brm(
 summary(m_interact_full_z)
 summary(m_interact_subset_z)
 summary(m_interact_phylo)
+
+# Phylo interaction predictions (Fig. S3)
+ws_mu <- mean(log10(df_model_WS_U$WS_U)); ws_sd <- sd(log10(df_model_WS_U$WS_U))
+lat_mu <- mean(df_model_WS_U_lat$abs_lat); lat_sd <- sd(df_model_WS_U_lat$abs_lat)
+ws_grid <- seq(min(df_model_WS_U_lat$log_WS_U_z), max(df_model_WS_U_lat$log_WS_U_z), length.out = 50)
+nd <- expand.grid(log_WS_U_z = ws_grid, abs_lat = c(0, 20, 40, 60)) %>%
+  mutate(abs_lat_z = (abs_lat - lat_mu) / lat_sd, prop_within_z = 0,
+         season = "S1")  # Reference season
+ep <- posterior_epred(m_interact_phylo, newdata = nd, re_formula = NA)
+pred_phylo <- nd %>%
+  mutate(WS_U = 10^(log_WS_U_z * ws_sd + ws_mu), fit = colMeans(ep),
+         lo = apply(ep, 2, quantile, 0.025), hi = apply(ep, 2, quantile, 0.975))
+dir.create("output/phylo_export", showWarnings = FALSE, recursive = TRUE)
+write_csv(pred_phylo, "output/phylo_export/interaction_phylo_predictions.csv")
+
+# Species-level phylogenetic checks
+sp_prop <- df_wb %>% group_by(species) %>% summarise(prop_mean = first(prop_mean), .groups = "drop")
+tree_sp <- drop.tip(tree_final, which(duplicated(tree_final$tip.label)))
+wing_phylo <- list()
+for (w in c("WS_U", "WS_L")) {
+  d <- df_lat_sp %>% left_join(sp_prop, by = "species") %>%
+    filter(is.finite(.data[[w]]), .data[[w]] > 0, species %in% tree_sp$tip.label) %>%
+    mutate(lw = log10(.data[[w]]), species_phylo = species)
+  A_sp <- vcv.phylo(keep.tip(tree_sp, d$species))
+  pri <- c(prior(normal(0, 1), class = "b"), prior(exponential(1), class = "sd"), prior(exponential(1), class = "sigma"))
+  m_lat <- brm(lw ~ abs_lat + (1 | gr(species_phylo, cov = A_sp)), data = d, data2 = list(A_sp = A_sp),
+               prior = pri, chains = 4, iter = 6000, warmup = 2000, cores = 4, seed = 1, control = list(adapt_delta = 0.99))
+  m_trop <- brm(prop_mean ~ lw + (1 | gr(species_phylo, cov = A_sp)), data = d, data2 = list(A_sp = A_sp),
+                prior = pri, chains = 4, iter = 6000, warmup = 2000, cores = 4, seed = 1, control = list(adapt_delta = 0.99))
+  wing_phylo[[w]] <- rbind(data.frame(model = "wingspan ~ latitude", term = "abs_lat", n = nrow(d), t(fixef(m_lat)["abs_lat", ])),
+                           data.frame(model = "tropical ~ wingspan", term = "lw", n = nrow(d), t(fixef(m_trop)["lw", ])))
+  wing_phylo[[w]]$wingspan <- w
+}
+write_csv(bind_rows(wing_phylo), "output/phylo_export/wingspan_phylo_models.csv")

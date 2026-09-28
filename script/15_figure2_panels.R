@@ -167,4 +167,18 @@ save_panel(add_tag(p2c, "c"), "panel_c")
 save_panel(add_tag(p2d, "d"), "panel_d")
 
 cat(sprintf("Saved 4 panels (PNG @ %d dpi + PDF) to: %s\n", PANEL_DPI, panel_dir))
+
+# Fig. S3: phylogenetic version of c
+pp <- read_csv("output/phylo_export/interaction_phylo_predictions.csv", show_col_types = FALSE) %>%
+  mutate(lat_group = factor(paste0(abs_lat, "°"), levels = paste0(c(0, 20, 40, 60), "°")))
+p_s3 <- ggplot(pp, aes(x = WS_U, y = fit, colour = lat_group, fill = lat_group)) +
+  geom_ribbon(aes(ymin = lo, ymax = hi), colour = NA, alpha = 0.15) +
+  geom_line(linewidth = 1.1) +
+  scale_x_log10() +
+  scale_colour_viridis_d(option = "viridis") + scale_fill_viridis_d(option = "viridis") +
+  labs(x = "Upper wingspan (log10 cm)", y = expression(log[10] * " Range size (" * km^2 * ")"),
+       colour = "Absolute\nlatitude", fill = "Absolute\nlatitude") +
+  theme_fig2
+dir.create("output/SI", showWarnings = FALSE)
+ggsave("output/SI/FigS_interaction_phylo.png", p_s3, width = PANEL_W, height = PANEL_H, dpi = PANEL_DPI, bg = "white")
 cat("Next: run script/16_figure2_compose.py to lay them out into the final Figure 2 grid.\n")
