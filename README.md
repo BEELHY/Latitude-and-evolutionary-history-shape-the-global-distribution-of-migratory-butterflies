@@ -14,18 +14,18 @@ Code for the analyses and figures of the manuscript on the macroecology of migra
 | 07_hemisphere_sensitivity.R | Northern vs southern hemisphere sensitivity | 
 | 08_hpc_run.sh | Spatial richness GAM on HPC (calls 08_hpc_install.R, 08_richness_gam_hpc.R) | 
 | 09_richness_gam_figures.R | GAM diagnostic figures | 
-| 10_nri_nti_data.R | NRI/NTI per 1° cell and model data | 
+| 10_nri_nti_data.R | NRI/NTI and covariates per equal-area cell (Behrmann, ~110 km) | 
 | 11_richness_gam_linear.R | Linear-covariate GAMs with spatial smooth | 
 | 12_forest_data.R | Forest plot data, built-up reference | 
 | 13_realm_area_s2.py | Equal-area high-richness (≥10 species) area by zoogeographic realm; Fig. S2 | 
 | 14_figure1_panels.py | Figure 1 panels (Robinson maps, latitude profile, colour bars) | 
-| 15_figure2_panels.R, 16_figure2_compose.py | Figure 2 | 
-| 17_figure3_panels.R, 18_figure3_compose.py | Figure 3 | 
+| 15_figure2_panels.R | Figure 2 (and Fig. S3) | 
+| 17_figure3_panels.R, 18_figure3_compose.R | Figure 3 | 
 | 19_variance_partition.R | Integrated model and variance partitioning | 
 
 - 01–04 run in one R session, in order (02–04 reuse objects created by 01).
 - 08 needs a large-memory node (see SBATCH header); copy `output/BAM/output/` back before running 09.
-- 13 and 14 read the raw seasonal suitability maps (Chowdhury et al. 2021), which are not redistributed; their realm-level output is provided in `updatedata/`.
+- 13 and 14 read the raw seasonal suitability maps (Chowdhury et al. 2025, *Conservation Biology*; method of Chowdhury et al. 2021, *Ecology Letters*), which are not redistributed; their realm-level output is provided in `updatedata/`.
 - All other scripts run standalone once their inputs exist.
 - Bayesian models use `seed = 1`; other random steps use `set.seed(1)`.
 

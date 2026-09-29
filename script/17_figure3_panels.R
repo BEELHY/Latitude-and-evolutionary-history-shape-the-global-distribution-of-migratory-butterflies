@@ -13,9 +13,6 @@ suppressPackageStartupMessages({
   library(ggnewscale)
   library(patchwork)
   library(viridis)
-  library(png)
-  library(grid)
-  library(ggimage)
 })
 
 out_dir <- "output/Manuscript/reproducibility_code"
@@ -74,8 +71,7 @@ df_for_fruit_ring <- df_plot_final %>%
   rename(Family_Identity_Ring = Family) %>% as.data.frame()
 
 # Fan tree
-BASE_SIZE <- 12
-DPI <- 600
+BASE_SIZE <- 7   # Nature: 5-7 pt text at the final width of 183 mm
 range_lim <- range(df_plot_final$Range_Val)
 
 p_iter <- ggtree(tree_pruned, layout = "fan", open.angle = 15, linewidth = 0.5)
@@ -86,7 +82,7 @@ p_iter$data <- p_iter$data %>%
 
 p_iter <- p_iter +
   aes(color = Final_Evolutionary_Value) +
-  geom_tree(linewidth = 0.8) +
+  geom_tree(linewidth = 0.45) +
   scale_color_viridis_c(option = "viridis", limits = range_lim,
                         name = expression(atop("Range size", "(" * log[10] * ", " * km^2 * ")")))
 
@@ -121,18 +117,17 @@ p_iter <- p_iter +
     plot.margin = margin(4, 4, 4, 4)
   )
 
-# Legend: horizontal colour bar with minimum and maximum at its ends (as in Figs 1 and 2a), 12 pt
+# Legend: horizontal colour bar with minimum and maximum at its ends (as in Figs 1 and 2a)
 p_leg <- ggplot(data.frame(x = seq(0, 1, length.out = 256))) +
-  geom_raster(aes(x = x, y = 0, fill = x)) +
+  geom_tile(aes(x = x, y = 0, fill = x), width = 1 / 255, height = 1, linewidth = 0) +  # vector colour bar
   scale_fill_viridis_c(guide = "none") +
   annotate("rect", xmin = 0, xmax = 1, ymin = -0.5, ymax = 0.5, fill = NA, colour = "black", linewidth = 0.3) +
-  annotate("text", x = -0.04, y = 0, label = sprintf("%.1f", range_lim[1]), hjust = 1, size = 12 / .pt, family = "Arial") +
-  annotate("text", x = 1.04, y = 0, label = sprintf("%.1f", range_lim[2]), hjust = 0, size = 12 / .pt, family = "Arial") +
+  annotate("text", x = -0.04, y = 0, label = sprintf("%.1f", range_lim[1]), hjust = 1, size = BASE_SIZE / .pt, family = "Arial") +
+  annotate("text", x = 1.04, y = 0, label = sprintf("%.1f", range_lim[2]), hjust = 0, size = BASE_SIZE / .pt, family = "Arial") +
   annotate("text", x = 0.5, y = 1.1, label = 'Range~size~(log[10]*","~km^2)', parse = TRUE, vjust = 0,
-           size = 12 / .pt, family = "Arial") +
+           size = BASE_SIZE / .pt, family = "Arial") +
   coord_cartesian(xlim = c(0, 1), ylim = c(-0.5, 0.5), expand = FALSE, clip = "off") +
-  theme_void() + theme(plot.margin = margin(22, 40, 2, 40))
-ggsave(file.path(out_dir, "Figure3_legend.png"), p_leg, width = 2.6, height = 0.45, dpi = DPI, bg = "transparent")
+  theme_void() + theme(plot.margin = margin(13, 24, 1, 24))
 p_iter <- p_iter + theme(legend.position = "none")
 
 # Histogram, all species
@@ -141,18 +136,12 @@ p_hist <- ggplot(df_plot_final, aes(x = Range_Val)) +
   scale_fill_viridis_c(option = "viridis", limits = range_lim, oob = scales::squish) +
   scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
   labs(x = expression("Range size (" * log[10] * ", " * km^2 * ")"), y = "Species") +
-  theme_classic(base_size = 12, base_family = "Arial") +
+  theme_classic(base_size = BASE_SIZE, base_family = "Arial") +
   theme(panel.background = element_blank(), plot.background = element_blank(),
-        axis.line = element_line(linewidth = 0.4, colour = "black"),
-        axis.ticks = element_line(linewidth = 0.4, colour = "black"),
+        axis.line = element_line(linewidth = 0.3, colour = "black"),
+        axis.ticks = element_line(linewidth = 0.3, colour = "black"),
         axis.text = element_text(colour = "black"))
 
-# Export tree and histogram
-IMG_PX <- 2200
-ggsave(file.path(out_dir, "Figure3_base.png"), p_iter,
-       width = IMG_PX / 300, height = IMG_PX / 300, dpi = DPI, bg = "white")
-ggsave(file.path(out_dir, "Figure3_hist.png"), p_hist,
-       width = 2.25, height = 1.55,  # native size (text at 12 pt), fits inside the tree centre
-       dpi = DPI, bg = "transparent")
-cat(sprintf("Saved: %s and Figure3_hist.png\n", file.path(out_dir, "Figure3_base.png")))
-cat("Next: run script/18_figure3_compose.py to overlay family labels + butterfly photos\n")
+# Export the three parts; script/18_figure3_compose.R assembles them as vector artwork
+saveRDS(list(tree = p_iter, hist = p_hist, legend = p_leg), file.path(out_dir, "Figure3_parts.rds"))
+cat("Saved Figure3_parts.rds; next run script/18_figure3_compose.R\n")

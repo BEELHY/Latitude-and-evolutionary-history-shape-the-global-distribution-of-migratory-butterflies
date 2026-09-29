@@ -20,11 +20,11 @@ warnings.filterwarnings('ignore')
 plt.rcParams.update({
     'font.family': 'sans-serif',
     'font.sans-serif': ['Arial'],
-    'font.size': 12,
-    'axes.labelsize': 12,
-    'axes.titlesize': 12,
-    'xtick.labelsize': 12,
-    'ytick.labelsize': 12,
+    'font.size': 7,
+    'axes.labelsize': 7,
+    'axes.titlesize': 7,
+    'xtick.labelsize': 7,
+    'ytick.labelsize': 7,
     'axes.linewidth': 0.5,
     'xtick.major.width': 0.5,
     'ytick.major.width': 0.5,
@@ -93,7 +93,8 @@ robinson = ccrs.Robinson(central_longitude=0)
 pc = ccrs.PlateCarree()
 LAND = '#e8e8e8'
 P_STEP = 2  # every 2nd cell (5 arc-min) for rendering
-FS = 12     # all text 12 pt, as the manuscript body text once placed at 6.5 in width
+FS = 7      # Nature: 5-7 pt text at the final width of 183 mm
+FS_TAG = 8  # panel labels 8 pt bold
 
 
 def base_map(ax, equator=True):
@@ -110,8 +111,8 @@ def raster(ax, arr, **kw):
 
 
 def title(x, y, letter, text):
-    fig.text(x, y, letter, fontsize=FS, fontweight='bold', va='top', ha='left')
-    fig.text(x + 0.03, y, text, fontsize=FS, va='top', ha='left', linespacing=1.15)
+    fig.text(x, y, letter, fontsize=FS_TAG, fontweight='bold', va='top', ha='left')
+    fig.text(x + 0.13 / FW, y, text, fontsize=FS, va='top', ha='left', linespacing=1.15)
 
 
 def end_bar(cax, mappable, lo, hi, label=None, mid=None):
@@ -131,9 +132,10 @@ def end_bar(cax, mappable, lo, hi, label=None, mid=None):
     return cb
 
 
-# Layout in inches from the top-left corner, following slide 1 of Figure1_final.pptx (6.5 in wide).
+# Layout in inches from the top-left corner, following slide 1 of Figure1_final.pptx, at the Nature
+# double-column width (183 mm; maximum height 170 mm).
 # Maps span 60 S - 90 N; panel b shares the vertical extent of map a, so latitudes line up.
-FW, FH = 6.5, 6.3
+FW, FH = 183 / 25.4, 6.62  # 168 mm tall
 fig = plt.figure(figsize=(FW, FH))
 ROB_W = 2 * robinson.transform_point(180, 0, pc)[0]
 rob_y = lambda lat: robinson.transform_point(0, lat, pc)[1]
@@ -148,21 +150,22 @@ def at(x, y):
     return x / FW, 1 - y / FH
 
 
-A_TOP, A_W = 0.55, 4.45
+A_TOP, A_W = 0.34, 5.0
 A_H = A_W / MAP_ASPECT
-title(*at(0.02, 0.06), 'a', 'Seasonal-switching richness')
+B_X, B_W = 5.5, 1.62
+title(*at(0.02, 0.04), 'a', 'Seasonal-switching richness')
 ax_a = box(0.0, A_TOP, A_W, A_H, projection=robinson)
-cax_a = box(2.95, 0.30, 1.2, 0.11)
-title(*at(4.35, 0.06), 'b', 'Mean seasonal-switching\nrichness (n species)')
-ax_b = box(4.95, A_TOP, 1.5, A_H)
-C_TOP = A_TOP + A_H + 0.12
+cax_a = box(3.3, 0.16, 1.0, 0.07)
+title(*at(B_X - 0.55, 0.04), 'b', 'Mean seasonal-switching\nrichness (n species)')
+ax_b = box(B_X, A_TOP, B_W, A_H)
+C_TOP = A_TOP + A_H + 0.3
 title(*at(0.02, C_TOP), 'c', 'Net species flux (gain − loss)')
-cax_c = box(2.95, C_TOP + 0.03, 1.2, 0.11)
-MAP_W = 3.2
+cax_c = box(3.3, C_TOP + 0.12, 1.0, 0.07)  # titled like the colour bar of a
+MAP_W = 3.55
 MAP_H = MAP_W / MAP_ASPECT
-ROW1 = C_TOP + 0.56
-ROW2 = ROW1 + MAP_H + 0.3
-axes_c = [box(x, y, MAP_W, MAP_H, projection=robinson) for y in (ROW1, ROW2) for x in (0.0, 3.3)]
+ROW1 = C_TOP + 0.42
+ROW2 = ROW1 + MAP_H + 0.2
+axes_c = [box(x, y, MAP_W, MAP_H, projection=robinson) for y in (ROW1, ROW2) for x in (0.0, FW - MAP_W)]
 
 # a
 base_map(ax_a)
@@ -188,15 +191,15 @@ for side in ('top', 'right'):
 ax_b.tick_params(labelsize=FS)
 # equator carried across the gap between a and b
 y_eq = 1 - (A_TOP + A_H * rob_y(90) / (rob_y(90) - rob_y(-60))) / FH
-fig.add_artist(mpl.lines.Line2D([A_W / FW, 4.95 / FW], [y_eq, y_eq], color='0.35', lw=0.4, ls=(0, (3, 3))))
+fig.add_artist(mpl.lines.Line2D([A_W / FW, B_X / FW], [y_eq, y_eq], color='0.35', lw=0.4, ls=(0, (3, 3))))
 
 # c
 for ax, (lab, d) in zip(axes_c, labels):
     base_map(ax, equator=False)
     raster(ax, np.ma.masked_equal(d, 0), cmap='viridis', norm=c_norm)
-    ax.set_title(lab, pad=3, fontsize=FS)
+    ax.set_title(lab, pad=2, fontsize=FS)
 sm = mpl.cm.ScalarMappable(norm=c_norm, cmap='viridis')
-end_bar(cax_c, sm, f'−{abs(c_min)}', str(c_max), mid=(0, '0'))
+end_bar(cax_c, sm, f'−{abs(c_min)}', str(c_max), label='Species (n)', mid=(0, '0'))
 
 for ext in ('png', 'pdf'):
     fig.savefig(os.path.join(output_dir, f"Figure1.{ext}"), dpi=600)
