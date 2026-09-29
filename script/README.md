@@ -15,9 +15,9 @@ Code for the analyses and figures of the manuscript on the macroecology of migra
 | 07_hemisphere_sensitivity.R | Northern vs southern hemisphere sensitivity | console |
 | 08_hpc_run.sh | Spatial richness GAM on HPC (calls 08_hpc_install.R, 08_richness_gam_hpc.R) | output/BAM/output/ |
 | 09_richness_gam_figures.R | GAM diagnostic figures | output/BAM/figures/ |
-| 10_nri_nti_data.R | NRI/NTI per 1° cell and model data | output/phylo_export/ |
-| 11_richness_gam_linear.R | Linear-covariate GAMs with spatial smooth | output/phylo_export/ |
-| 12_forest_data.R | Forest plot data, built-up reference | output/phylo_export/ |
+| 10_nri_nti_data.R | NRI/NTI and covariates per equal-area cell (Behrmann, ~110 km) | output/phylo_export/ |
+| 11_richness_gam_linear.R | Richness GAMs on equal-area cells (main model, 247 species, + NRI/NTI) | output/phylo_export/ |
+| 12_forest_data.R | Fig. 2d data, Table S3 GAM columns, Fig. S5 (built-up reference) | output/phylo_export/, output/SI/ |
 | 13_realm_area_s2.py | Equal-area richness and high-richness (≥10 species) area by zoogeographic realm; Fig. S2 | output/realm_area/ |
 | 14_figure1_panels.py | Figure 1 (Robinson maps, latitude profile, seasonal net change) | output/Manuscript/figure1_panels/Figure1.png, .pdf |
 | 15_figure2_panels.R | Figure 2 (and Fig. S3) | output/Manuscript/reproducibility_code/Figure2_final.png, .pdf |

@@ -1,4 +1,4 @@
-# Linear GAM, NRI/NTI appendix.
+# Linear GAM on equal-area cells (main, Fig. 2d), NRI/NTI appendix.
 
 suppressMessages({
   library(dplyr)
@@ -16,8 +16,8 @@ cat(sprintf("Modelling dataset: %d grid cells\n", nrow(model_df)))
 SPATIAL_K <- 800
 fit_gam <- function(formula, data) bam(formula, data = data, family = nb(), method = "fREML")
 
-coords <- as.matrix(model_df[, c("lon1", "lat1")])
-nb <- dnearneigh(coords, d1 = 0, d2 = 1.5)
+coords <- as.matrix(model_df[, c("x_km", "y_km")])
+nb <- dnearneigh(coords, d1 = 0, d2 = 1.5 * 109.92)  # neighbours within 1.5 cells
 listw <- nb2listw(nb, style = "W", zero.policy = TRUE)
 
 moran_report <- function(mod, label) {
@@ -29,7 +29,7 @@ moran_report <- function(mod, label) {
 # Main: global richness
 cat("\n=== MAIN: A_lin_sm, global richness (Richness_full) ===\n")
 m_A <- fit_gam(
-  Richness_full ~ Bio_4 + Bio_15 + Elevation + HII + Landuse + s(lon1, lat1, k = SPATIAL_K) +
+  Richness_full ~ Bio_4 + Bio_15 + Elevation + HII + Landuse + s(x_km, y_km, k = SPATIAL_K) +
     offset(log(n_fine_cells)),  # Per 2.5-arcmin cell
   model_df)
 print(summary(m_A))
@@ -38,14 +38,14 @@ moran_report(m_A, "A_lin_sm (global, main)")
 # Appendix: 247 species, NRI/NTI
 cat("\n=== SUPP: B_lin_sm, 247-sp subset, no NRI/NTI ===\n")
 m_B <- fit_gam(
-  Richness_247 ~ Bio_4 + Bio_15 + Elevation + HII + Landuse + s(lon1, lat1, k = SPATIAL_K),
+  Richness_247 ~ Bio_4 + Bio_15 + Elevation + HII + Landuse + s(x_km, y_km, k = SPATIAL_K),
   model_df)
 print(summary(m_B))
 moran_report(m_B, "B_lin_sm (247-sp, no NRI/NTI)")
 
 cat("\n=== SUPP: C_lin_sm, 247-sp subset, with NRI/NTI ===\n")
 m_C <- fit_gam(
-  Richness_247 ~ Bio_4 + Bio_15 + Elevation + HII + Landuse + NRI + NTI + s(lon1, lat1, k = SPATIAL_K),
+  Richness_247 ~ Bio_4 + Bio_15 + Elevation + HII + Landuse + NRI + NTI + s(x_km, y_km, k = SPATIAL_K),
   model_df)
 print(summary(m_C))
 moran_report(m_C, "C_lin_sm (247-sp, with NRI/NTI)")

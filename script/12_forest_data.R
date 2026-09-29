@@ -83,3 +83,50 @@ ggsave("output/phylo_export/Figure2d_forest_main_model_built_ref.pdf", p, width 
 
 cat("\nSaved: output/BAM/figures/Figure2d_forest_main_model_built_ref.png\n")
 cat("Saved: output/phylo_export/Figure2d_forest_main_model_built_ref.pdf\n")
+
+# Table S3 (GAM columns) and Fig. S5: the three equal-area models, land cover vs built-up
+contrasts <- function(mod, label) {
+  cf <- coef(mod); V <- vcov(mod)
+  terms <- intersect(c("Bio_4", "Bio_15", "Elevation", "HII", "NRI", "NTI"), names(cf))
+  env <- tibble::tibble(term = terms, est = cf[terms], se = sqrt(diag(V)[terms]))
+  bb <- "Landusebuilt"
+  lu <- dplyr::bind_rows(
+    tibble::tibble(term = "Cropland", est = -cf[bb], se = sqrt(V[bb, bb])),
+    lapply(c(Grassland = "Landusegrassland", Shrubs = "Landuseshrubs", Trees = "Landusetrees"), function(k)
+      tibble::tibble(est = cf[k] - cf[bb], se = sqrt(V[k, k] + V[bb, bb] - 2 * V[k, bb]))) %>%
+      dplyr::bind_rows(.id = "term"))
+  dplyr::bind_rows(env, lu) %>%
+    mutate(model = label, lo = est - 1.96 * se, hi = est + 1.96 * se, p = 2 * pnorm(-abs(est / se)))
+}
+gam_rows <- dplyr::bind_rows(contrasts(bundle$m_A, "main"), contrasts(bundle$m_B, "sp247"),
+                             contrasts(bundle$m_C, "sp247_NRI_NTI"))
+si_file <- "output/SI/richness_models_builtref.csv"
+old <- readr::read_csv(si_file, show_col_types = FALSE) %>%
+  dplyr::filter(!model %in% c("main", "sp247", "sp247_NRI_NTI"))
+readr::write_csv(dplyr::bind_rows(gam_rows %>% dplyr::select(model, term, est, se, lo, hi, p), old), si_file)
+
+lab <- c(Bio_4 = "Temperature\nseasonality", Bio_15 = "Precipitation\nseasonality", Elevation = "Elevation",
+         HII = "Human influence", Cropland = "Cropland", Grassland = "Grassland", Shrubs = "Shrubland",
+         Trees = "Forest", NRI = "Net relatedness\nindex", NTI = "Nearest taxon\nindex")
+panel <- c(main = "a  All species (main model)", sp247 = "b  247 phylogenetically matched species",
+           sp247_NRI_NTI = "c  247 species + community phylogenetic structure")
+s5 <- gam_rows %>%
+  mutate(group = dplyr::case_when(term %in% c("NRI", "NTI") ~ "Phylogenetic structure",
+                                  term %in% c("Cropland", "Grassland", "Shrubs", "Trees") ~ "Land cover (vs built-up)",
+                                  TRUE ~ "Environment"),
+         sig = ifelse(lo > 0 | hi < 0, "P < 0.05", "n.s."),
+         term = factor(lab[term], levels = rev(lab)), model = factor(panel[model], levels = panel))
+p_s5 <- ggplot(s5, aes(x = est, y = term, colour = group, shape = sig)) +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey50", linewidth = 0.4) +
+  geom_errorbar(aes(xmin = lo, xmax = hi), width = 0.25, linewidth = 0.6, orientation = "y") +
+  geom_point(size = 2.2, fill = "white", stroke = 0.8) +
+  facet_wrap(~ model, nrow = 1, scales = "free_x") +
+  scale_colour_manual(values = c("Environment" = "#1b7837", "Land cover (vs built-up)" = "#762a83",
+                                 "Phylogenetic structure" = "#E08214"), name = NULL) +
+  scale_shape_manual(values = c("P < 0.05" = 16, "n.s." = 21), name = NULL) +
+  labs(x = "Coefficient estimate (95% confidence interval, log scale)", y = NULL) +
+  theme_classic(base_size = 11, base_family = "Arial") +
+  theme(legend.position = "top", strip.background = element_blank(),
+        strip.text = element_text(face = "bold", hjust = 0), axis.text = element_text(colour = "black"))
+ggsave("output/SI/FigS_NRI_NTI.png", p_s5, width = 11, height = 5.2, dpi = 400, bg = "white", device = ragg::agg_png)
+cat("Saved: output/SI/richness_models_builtref.csv (GAM rows) and output/SI/FigS_NRI_NTI.png\n")

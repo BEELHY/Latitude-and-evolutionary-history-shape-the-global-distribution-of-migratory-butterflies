@@ -1,4 +1,4 @@
-# NRI/NTI grid data.
+# NRI/NTI and covariates on an equal-area grid (Behrmann, ~110 km cells).
 
 suppressMessages({
   library(ape)
@@ -7,6 +7,7 @@ suppressMessages({
   library(readr)
   library(tidyr)
   library(tibble)
+  library(terra)
 })
 
 set.seed(1)
@@ -26,8 +27,8 @@ cat(sprintf("Tree species after dedupe: %d\n", length(tree_sp)))
 
 phylo_dist_full <- cophenetic(tree)
 
-# Presence at 1 degree
-comm <- readRDS("updatedata/community_1deg.rds")
+# Presence in equal-area cells (species present in any season)
+comm <- readRDS("updatedata/community_ea.rds")
 comm_tree    <- comm$comm_tree
 cell_xy      <- comm$cell_xy
 richness_247 <- comm$richness_247
@@ -53,25 +54,29 @@ mntd_res <- ses.mntd(comm_sub, phylo_dist, null.model = "richness",
 cat(sprintf("Done in %.1f min\n", as.numeric(difftime(Sys.time(), t0, units = "mins"))))
 
 nri_nti <- data.frame(
-  lon1 = cell_xy_sub[, "lon1"],
-  lat1 = cell_xy_sub[, "lat1"],
+  ix = cell_xy_sub[, "ix"], iy = cell_xy_sub[, "iy"],
+  x_km = cell_xy_sub[, "x_km"], y_km = cell_xy_sub[, "y_km"],
+  lon = cell_xy_sub[, "lon"], lat = cell_xy_sub[, "lat"],
   Richness_247 = richness_247[keep],
   NRI = -1 * mpd_res$mpd.obs.z,
   NTI = -1 * mntd_res$mntd.obs.z
 )
 write_csv(nri_nti, "output/phylo_export/figure4d_NRI_NTI_by_cell.csv")
 
-# Covariates at 1 degree
-cat("Loading + aggregating richness_grid.csv to 1 degree...\n")
+# Covariates aggregated to the same equal-area cells
+cat("Loading + aggregating richness_grid.csv to equal-area cells...\n")
 env_fine <- read_csv("updatedata/richness_grid.csv", show_col_types = FALSE)
 
+HALF_W <- 17367530.445161372  # Behrmann x at 180 degrees
+CELL <- 2 * HALF_W / 316        # 316 columns: ~109.9 km square cells
+xy <- project(cbind(env_fine$lon, env_fine$lat), from = "EPSG:4326", to = "ESRI:54017")
 env_fine <- env_fine %>%
-  mutate(lon1 = floor(lon) + 0.5, lat1 = floor(lat) + 0.5)
+  mutate(ix = floor((xy[, 1] + HALF_W) / CELL), iy = floor(xy[, 2] / CELL))
 
 landuse_mode <- function(x) names(sort(table(x), decreasing = TRUE))[1]
 
 env_coarse <- env_fine %>%
-  group_by(lon1, lat1) %>%
+  group_by(ix, iy) %>%
   summarise(
     Richness_full = sum(Richness, na.rm = TRUE),
     Bio_4         = mean(Bio_4, na.rm = TRUE),
@@ -84,10 +89,10 @@ env_coarse <- env_fine %>%
   )
 
 model_df <- nri_nti %>%
-  inner_join(env_coarse, by = c("lon1", "lat1")) %>%
+  inner_join(env_coarse, by = c("ix", "iy")) %>%
   mutate(Landuse = factor(Landuse)) %>%
   filter(!is.na(Bio_4), !is.na(Bio_15), !is.na(Elevation), !is.na(HII))
 model_df$Landuse <- relevel(model_df$Landuse, ref = "cropland")
 
-cat(sprintf("Final modeling dataset: %d grid cells (1-degree)\n", nrow(model_df)))
+cat(sprintf("Final modeling dataset: %d equal-area grid cells\n", nrow(model_df)))
 write_csv(model_df, "output/phylo_export/figure4d_phylo_sensitivity_model_data.csv")
