@@ -78,8 +78,8 @@ for fam, angles in angle_lists.items():
 
 # Placement
 TEXT_R_FRAC = 1.06  # Labels outside ring
-IMG_R_FRAC = 1.19  # Photos beyond labels
-IMG_SIZE_FRAC = 0.15  # Photo size vs radius
+IMG_R_FRAC = 1.21  # Photos beyond labels
+IMG_SIZE_FRAC = 0.18  # Photo size vs radius
 DPI = 600
 FONT_SIZE_PX = round(12 / 72 * DPI)  # 12 pt
 
@@ -99,7 +99,7 @@ def compose(font_px, sc):
     hist = Image.open(BASE / "Figure3_hist.png").convert("RGBA")
     hist = hist.resize((round(hist.width * sc), round(hist.height * sc)), Image.LANCZOS)
     hw, hh = hist.size
-    canvas.alpha_composite(hist, (int(ctr[0] - hw / 2), int(ctr[1] - hh / 2)))
+    canvas.alpha_composite(hist, (int(ctr[0] - hw / 2 + 0.1 * R), int(ctr[1] - hh / 2)))  # shifted into the open side of the fan
 
     for fam, a in fam_angle.items():
         deg = math.degrees(a)

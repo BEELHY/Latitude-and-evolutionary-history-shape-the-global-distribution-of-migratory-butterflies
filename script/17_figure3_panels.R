@@ -152,7 +152,7 @@ IMG_PX <- 2200
 ggsave(file.path(out_dir, "Figure3_base.png"), p_iter,
        width = IMG_PX / 300, height = IMG_PX / 300, dpi = DPI, bg = "white")
 ggsave(file.path(out_dir, "Figure3_hist.png"), p_hist,
-       width = 2.3, height = 1.8,  # native size: text at 12 pt
+       width = 2.25, height = 1.55,  # native size (text at 12 pt), fits inside the tree centre
        dpi = DPI, bg = "transparent")
 cat(sprintf("Saved: %s and Figure3_hist.png\n", file.path(out_dir, "Figure3_base.png")))
 cat("Next: run script/18_figure3_compose.py to overlay family labels + butterfly photos\n")

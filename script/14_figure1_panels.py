@@ -97,7 +97,7 @@ FS = 12     # all text 12 pt, as the manuscript body text once placed at 6.5 in 
 
 
 def base_map(ax, equator=True):
-    ax.set_global()
+    ax.set_extent([-180, 180, -60, 90], crs=pc)
     ax.spines['geo'].set_visible(False)
     ax.add_geometries(world.geometry, crs=pc, facecolor=LAND, edgecolor='none', zorder=1)
     if equator:
@@ -131,9 +131,13 @@ def end_bar(cax, mappable, lo, hi, label=None, mid=None):
     return cb
 
 
-# Layout in inches from the top-left corner, following slide 1 of Figure1_final.pptx (6.5 in wide)
-FW, FH = 6.5, 6.7
+# Layout in inches from the top-left corner, following slide 1 of Figure1_final.pptx (6.5 in wide).
+# Maps span 60 S - 90 N; panel b shares the vertical extent of map a, so latitudes line up.
+FW, FH = 6.5, 6.3
 fig = plt.figure(figsize=(FW, FH))
+ROB_W = 2 * robinson.transform_point(180, 0, pc)[0]
+rob_y = lambda lat: robinson.transform_point(0, lat, pc)[1]
+MAP_ASPECT = ROB_W / (rob_y(90) - rob_y(-60))
 
 
 def box(x, y, w, h, **kw):
@@ -144,34 +148,47 @@ def at(x, y):
     return x / FW, 1 - y / FH
 
 
-title(*at(0.02, 0.10), 'a', 'Seasonal-switching richness')
-ax_a = box(0.0, 0.62, 4.4, 2.2, projection=robinson)
-cax_a = box(2.95, 0.36, 1.25, 0.11)
-title(*at(4.55, 0.10), 'b', 'Mean seasonal-\nswitching richness\n(n species)')
-ax_b = box(5.0, 0.95, 1.4, 1.8)
-title(*at(0.02, 3.05), 'c', 'Net species flux (gain − loss)')
-cax_c = box(2.95, 3.10, 1.25, 0.11)
-axes_c = [box(x, y, 3.2, 1.62, projection=robinson) for y in (3.55, 5.08) for x in (0.0, 3.3)]
+A_TOP, A_W = 0.55, 4.45
+A_H = A_W / MAP_ASPECT
+title(*at(0.02, 0.06), 'a', 'Seasonal-switching richness')
+ax_a = box(0.0, A_TOP, A_W, A_H, projection=robinson)
+cax_a = box(2.95, 0.30, 1.2, 0.11)
+title(*at(4.35, 0.06), 'b', 'Mean seasonal-switching\nrichness (n species)')
+ax_b = box(4.95, A_TOP, 1.5, A_H)
+C_TOP = A_TOP + A_H + 0.12
+title(*at(0.02, C_TOP), 'c', 'Net species flux (gain − loss)')
+cax_c = box(2.95, C_TOP + 0.03, 1.2, 0.11)
+MAP_W = 3.2
+MAP_H = MAP_W / MAP_ASPECT
+ROW1 = C_TOP + 0.56
+ROW2 = ROW1 + MAP_H + 0.3
+axes_c = [box(x, y, MAP_W, MAP_H, projection=robinson) for y in (ROW1, ROW2) for x in (0.0, 3.3)]
 
 # a
 base_map(ax_a)
 im_a = raster(ax_a, np.ma.masked_equal(migratory_richness_map, 0), cmap='viridis', vmin=1, vmax=max_richness)
 end_bar(cax_a, im_a, '1', str(max_richness), label='Species (n)')
 
-# b: mean richness across occupied cells within each latitude band
+# b: mean richness across occupied cells within each latitude band, plotted on the Robinson
+# vertical coordinate so that each latitude sits level with map a
 lats = np.linspace(90, -90, height)
 lat_mean = np.array([r[r > 0].mean() if (r > 0).any() else 0.0 for r in migratory_richness_map])
-ax_b.fill_betweenx(lats, 0, lat_mean, color=mpl.cm.viridis(0.55), alpha=0.35, lw=0)
-ax_b.plot(lat_mean, lats, color=mpl.cm.viridis(0.3), lw=0.7)
+ys = np.array([rob_y(l) for l in lats])
+ax_b.fill_betweenx(ys, 0, lat_mean, color=mpl.cm.viridis(0.55), alpha=0.35, lw=0)
+ax_b.plot(lat_mean, ys, color=mpl.cm.viridis(0.3), lw=0.7)
 ax_b.axhline(0, color='0.35', lw=0.4, ls=(0, (3, 3)))
-ax_b.set_ylim(-60, 90)
-ax_b.set_yticks([-60, 0, 90])
-ax_b.set_yticklabels(['−60°', '0°', '90°'])
+ax_b.set_ylim(rob_y(-60), rob_y(90))
+ax_b.set_yticks([rob_y(90), 0, rob_y(-60)])
+ax_b.set_yticklabels(['90°', '0°', '−60°'])
+ax_b.get_yticklabels()[1].set_va('top')  # sits just below the equator line, as in the slide
 ax_b.set_xlim(0, np.ceil(lat_mean.max() / 5) * 5)
 ax_b.set_xticks([0, 15])
 for side in ('top', 'right'):
     ax_b.spines[side].set_visible(False)
 ax_b.tick_params(labelsize=FS)
+# equator carried across the gap between a and b
+y_eq = 1 - (A_TOP + A_H * rob_y(90) / (rob_y(90) - rob_y(-60))) / FH
+fig.add_artist(mpl.lines.Line2D([A_W / FW, 4.95 / FW], [y_eq, y_eq], color='0.35', lw=0.4, ls=(0, (3, 3))))
 
 # c
 for ax, (lab, d) in zip(axes_c, labels):

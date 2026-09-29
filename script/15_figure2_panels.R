@@ -46,12 +46,14 @@ theme_fig2 <- theme_classic(base_size = BASE_SIZE, base_family = "Arial") +
     axis.text = element_text(colour = "black", size = BASE_SIZE),
     axis.title = element_text(size = BASE_SIZE),
     legend.background = element_blank(),
-    legend.key.size = unit(2.6, "mm"),
+    legend.key.width = unit(4, "mm"), legend.key.height = unit(3, "mm"),
+    legend.key.spacing = unit(1, "mm"), legend.spacing = unit(0, "mm"),
+    axis.title.y = element_text(margin = margin(r = 3)), axis.title.x = element_text(margin = margin(t = 3)),
     legend.text = element_text(size = BASE_SIZE),
     legend.title = element_text(size = BASE_SIZE),
     legend.position = "top", legend.justification = "left", legend.direction = "horizontal",
     legend.margin = margin(0, 0, 0, 0), legend.box.spacing = unit(1, "mm"),
-    plot.margin = margin(4, 6, 4, 4)
+    plot.margin = margin(3, 4, 3, 3)
   )
 
 # Horizontal colour bar with the minimum and maximum written at its two ends (as in Fig. 1)
@@ -83,16 +85,17 @@ p2a <- ggplot() +
              alpha = 0.5, size = 0.8, stroke = 0) +
   scale_color_viridis_c(option = "viridis", na.value = "grey75") +
   scale_x_continuous(expand = expansion(mult = c(0.02, 0.02))) +
+  scale_y_continuous(limits = c(1.4, NA)) +  # empty band at the bottom for the colour bar
   geom_line(data = pred_pattern, aes(x = prop_mean, y = log10_range),
             color = "black", linewidth = 0.6) +
   labs(x = "Mean proportion of range in the tropics", y = lab_range,
        color = "Temperature\nseasonality") +
   guides(color = "none") +
   theme_fig2 +
-  theme(plot.margin = margin(34, 8, 4, 4))
+  theme(plot.margin = margin(3, 4, 3, 3))
 bio4_rng <- range(final_df$mean_bio4, na.rm = TRUE)
 p2a <- p2a + inset_element(end_bar(round(bio4_rng[1]), round(bio4_rng[2]), "Temperature seasonality"),
-                           left = 0.30, right = 0.78, bottom = 1.035, top = 1.085, align_to = "panel",
+                           left = 0.30, right = 0.72, bottom = 0.03, top = 0.07, align_to = "panel",
                            clip = FALSE, ignore_tag = TRUE)
 
 # Panel b
@@ -122,7 +125,9 @@ p2b <- ggplot() +
   scale_fill_manual(values = c("Lower" = viridisLite::viridis(5)[4], "Upper" = viridisLite::viridis(5)[1])) +
   labs(x = "Absolute latitude (°)", y = lab_ws("Wingspan"),
        color = "Wingspan", fill = "Wingspan") +
-  theme_fig2
+  theme_fig2 +
+  theme(legend.position = "inside", legend.position.inside = c(0.99, 0.99), legend.justification.inside = c(1, 1),
+        legend.direction = "vertical")
 
 # Panel c
 m_interact <- lmer(log10(range_km2) ~ abs_lat * log10(WS_L) + prop_within + season + (1 | species),
@@ -143,17 +148,19 @@ p2c <- ggplot(pred_c, aes(x = WS_L, y = fit, color = lat_group, fill = lat_group
   scale_fill_viridis_d(option = "viridis", end = 0.85) +
   labs(x = lab_ws("Lower wingspan"), y = lab_range,
        color = "Absolute latitude", fill = "Absolute latitude") +
-  guides(color = guide_legend(nrow = 1), fill = guide_legend(nrow = 1)) +
-  theme_fig2
+  guides(color = guide_legend(nrow = 2), fill = guide_legend(nrow = 2)) +
+  theme_fig2 +
+  theme(legend.position = "inside", legend.position.inside = c(0.01, 0.99), legend.justification.inside = c(0, 1),
+        legend.direction = "horizontal", legend.title.position = "top")
 
 # Panel d: main GAM (black only; filled = 95% CI excludes zero)
 forest_df <- read_csv("output/phylo_export/main_model_forest_data_built_ref.csv", show_col_types = FALSE) %>%
-  mutate(variable = recode(variable, "Bio_4" = "Temperature\nseasonality", "Bio_15" = "Precipitation\nseasonality",
-                           "HII" = "Human\ninfluence", "Trees" = "Forest", "Shrubs" = "Shrubland"),
+  mutate(variable = recode(variable, "Bio_4" = "Temperature seasonality", "Bio_15" = "Precipitation seasonality",
+                           "HII" = "Human influence", "Trees" = "Forest", "Shrubs" = "Shrubland"),
          group = factor(ifelse(type == "Environmental", "Environment", "Land cover\n(vs built-up)"),
                         levels = c("Environment", "Land cover\n(vs built-up)")),
-         variable = factor(variable, levels = rev(c("Temperature\nseasonality", "Precipitation\nseasonality",
-                                                    "Elevation", "Human\ninfluence",
+         variable = factor(variable, levels = rev(c("Temperature seasonality", "Precipitation seasonality",
+                                                    "Elevation", "Human influence",
                                                     "Cropland", "Grassland", "Shrubland", "Forest"))))
 
 p2d <- ggplot(forest_df, aes(x = estimate, y = variable, shape = sig)) +
@@ -163,20 +170,19 @@ p2d <- ggplot(forest_df, aes(x = estimate, y = variable, shape = sig)) +
   scale_shape_manual(values = c("Significant" = 16, "Non-significant" = 21), name = NULL,
                      breaks = c("Significant", "Non-significant"), labels = c("P < 0.05", "P ≥ 0.05")) +
   facet_grid(group ~ ., scales = "free_y", space = "free_y") +
-  labs(x = "Coefficient estimate\n(95% confidence interval)", y = NULL) +
+  labs(x = "Coefficient estimate", y = NULL) +
   theme_fig2 +
   theme(strip.background = element_blank(), strip.text = element_blank(), panel.spacing.y = unit(3, "mm"),
-        axis.text.y = element_text(lineheight = 0.85),
         legend.position = "inside", legend.position.inside = c(0.02, 0.02), legend.justification.inside = c(0, 0),
         legend.direction = "vertical")
 
 # Compose Figure 2 (6.5 in wide, the text width of the manuscript)
-fig2 <- (p2a + p2b) / (p2c + p2d) + plot_layout(heights = c(1, 1.3)) +
+fig2 <- (p2a + p2b) / (p2c + p2d + plot_layout(widths = c(0.9, 1.1))) + plot_layout(heights = c(1, 1.05)) +
   plot_annotation(tag_levels = "a") &
   theme(plot.tag = element_text(face = "bold", size = BASE_SIZE, family = "Arial"))
-ggsave(file.path(out_dir, "Figure2_final.png"), fig2, width = 6.5, height = 7.4, units = "in",
+ggsave(file.path(out_dir, "Figure2_final.png"), fig2, width = 6.5, height = 5.3, units = "in",
        dpi = 600, device = ragg::agg_png, bg = "white")
-ggsave(file.path(out_dir, "Figure2_final.pdf"), fig2, width = 6.5, height = 7.4, units = "in",
+ggsave(file.path(out_dir, "Figure2_final.pdf"), fig2, width = 6.5, height = 5.3, units = "in",
        device = cairo_pdf)
 cat("Saved Figure 2 to", out_dir, "\n")
 
