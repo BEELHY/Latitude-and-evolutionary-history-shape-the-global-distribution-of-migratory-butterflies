@@ -75,6 +75,8 @@ df_for_fruit_ring <- df_plot_final %>%
 
 # Fan tree
 BASE_SIZE <- 12
+DPI <- 600
+range_lim <- range(df_plot_final$Range_Val)
 
 p_iter <- ggtree(tree_pruned, layout = "fan", open.angle = 15, linewidth = 0.5)
 p_iter$data <- p_iter$data %>%
@@ -85,14 +87,15 @@ p_iter$data <- p_iter$data %>%
 p_iter <- p_iter +
   aes(color = Final_Evolutionary_Value) +
   geom_tree(linewidth = 0.8) +
-  scale_color_viridis_c(option = "viridis", name = expression(atop(log[10] * " Range", "size (" * km^2 * ")")))
+  scale_color_viridis_c(option = "viridis", limits = range_lim,
+                        name = expression(atop("Range size", "(" * log[10] * ", " * km^2 * ")")))
 
 p_iter <- p_iter +
   new_scale_fill() +
   geom_fruit(data = df_plot_final, geom = geom_tile,
              mapping = aes(y = label, fill = Range_Val),
              width = 10, offset = 0.05, linewidth = 0) +
-  scale_fill_viridis_c(option = "viridis", guide = "none")
+  scale_fill_viridis_c(option = "viridis", limits = range_lim, guide = "none")
 
 p_iter <- p_iter +
   new_scale_fill() +
@@ -104,7 +107,7 @@ p_iter <- p_iter +
 # Root edge opens centre
 p_iter <- p_iter +
   scale_x_continuous(expand = expansion(mult = c(0.2, 0.1))) +
-  geom_rootedge(rootedge = 75)
+  geom_rootedge(rootedge = 75, colour = NA)  # invisible: only opens the centre
 
 # No labels or photos here
 p_iter <- p_iter +
@@ -122,29 +125,29 @@ p_iter <- p_iter +
 g_full <- ggplotGrob(p_iter)
 legend_grob <- g_full$grobs[[grep("guide-box", g_full$layout$name)[1]]]
 png(file.path(out_dir, "Figure3_legend.png"), width = 4, height = 4,
-    units = "in", res = 300, bg = "transparent")
+    units = "in", res = DPI, bg = "transparent")
 grid::grid.draw(legend_grob)
 dev.off()
 p_iter <- p_iter + theme(legend.position = "none")
 
 # Histogram, all species
 p_hist <- ggplot(df_plot_final, aes(x = Range_Val)) +
-  geom_histogram(aes(fill = after_stat(x)), bins = 30, color = "white", show.legend = FALSE) +
-  scale_fill_viridis_c(option = "plasma") +
-  labs(x = expression(log[10] * " range (" * km^2 * ")"), y = "Species") +
-  theme_minimal(base_size = BASE_SIZE) +
+  geom_histogram(aes(fill = after_stat(x)), bins = 30, color = "white", linewidth = 0.2, show.legend = FALSE) +
+  scale_fill_viridis_c(option = "viridis", limits = range_lim, oob = scales::squish) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
+  labs(x = expression("Range size (" * log[10] * ", " * km^2 * ")"), y = "Species") +
+  theme_classic(base_size = BASE_SIZE - 2) +
   theme(panel.background = element_blank(), plot.background = element_blank(),
-        panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        axis.line = element_line(linewidth = 0.6, colour = "black"),
-        axis.title = element_text(size = BASE_SIZE, face = "bold"),
-        axis.text = element_text(size = BASE_SIZE, face = "bold"))
+        axis.line = element_line(linewidth = 0.4, colour = "black"),
+        axis.ticks = element_line(linewidth = 0.4, colour = "black"),
+        axis.text = element_text(colour = "black"))
 
 # Export tree and histogram
 IMG_PX <- 2200
 ggsave(file.path(out_dir, "Figure3_base.png"), p_iter,
-       width = IMG_PX / 300, height = IMG_PX / 300, dpi = 300, bg = "white")
+       width = IMG_PX / 300, height = IMG_PX / 300, dpi = DPI, bg = "white")
 ggsave(file.path(out_dir, "Figure3_hist.png"), p_hist,
-       width = 1.95, height = 1.6,  # Native size keeps 12pt
-       dpi = 300, bg = "transparent")
+       width = 1.95, height = 1.5,  # Native size keeps text at 10 pt
+       dpi = DPI, bg = "transparent")
 cat(sprintf("Saved: %s and Figure3_hist.png\n", file.path(out_dir, "Figure3_base.png")))
 cat("Next: run script/18_figure3_compose.py to overlay family labels + butterfly photos\n")

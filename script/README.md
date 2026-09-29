@@ -19,8 +19,8 @@ Code for the analyses and figures of the manuscript on the macroecology of migra
 | 11_richness_gam_linear.R | Linear-covariate GAMs with spatial smooth | output/phylo_export/ |
 | 12_forest_data.R | Forest plot data, built-up reference | output/phylo_export/ |
 | 13_realm_area_s2.py | Equal-area richness and high-richness (≥10 species) area by zoogeographic realm; Fig. S2 | output/realm_area/ |
-| 14_figure1_panels.py | Figure 1 panels (Robinson maps, latitude profile, colour bars); assembled manually | output/Manuscript/figure1_panels/ |
-| 15_figure2_panels.R, 16_figure2_compose.py | Figure 2 | output/Manuscript/reproducibility_code/ |
+| 14_figure1_panels.py | Figure 1 (Robinson maps, latitude profile, seasonal net change) | output/Manuscript/figure1_panels/Figure1.png, .pdf |
+| 15_figure2_panels.R | Figure 2 (and Fig. S3) | output/Manuscript/reproducibility_code/Figure2_final.png, .pdf |
 | 17_figure3_panels.R, 18_figure3_compose.py | Figure 3 | output/Manuscript/reproducibility_code/ |
 | 19_variance_partition.R | Integrated phylogenetic model and variance partitioning (Table S6, Fig. S9) | output/phylo_export/ |
 

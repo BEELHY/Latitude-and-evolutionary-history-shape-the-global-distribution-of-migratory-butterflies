@@ -78,9 +78,10 @@ for fam, angles in angle_lists.items():
 
 # Placement
 TEXT_R_FRAC = 1.06  # Labels outside ring
-IMG_R_FRAC = 1.15  # Photos beyond labels
-IMG_SIZE_FRAC = 0.13  # Photo size vs radius
-FONT_SIZE_PX = 50  # 12pt at 300 dpi
+IMG_R_FRAC = 1.13  # Photos beyond labels
+IMG_SIZE_FRAC = 0.075  # Photo size vs radius
+DPI = 600
+FONT_SIZE_PX = round(12 / 72 * DPI)  # 12 pt
 
 PAD = int(R * 0.35)
 canvas = Image.new("RGBA", (W + 2 * PAD, H + 2 * PAD), (255, 255, 255, 255))
@@ -117,7 +118,7 @@ for fam, a in fam_angle.items():
     # Label
     tx = center[0] + R * TEXT_R_FRAC * math.cos(a)
     ty = center[1] + R * TEXT_R_FRAC * math.sin(a)
-    txt_layer = Image.new("RGBA", (400, 100), (0, 0, 0, 0))
+    txt_layer = Image.new("RGBA", (8 * FONT_SIZE_PX, 2 * FONT_SIZE_PX), (0, 0, 0, 0))
     d = ImageDraw.Draw(txt_layer)
     d.text((0, 0), fam, font=font, fill=(0, 0, 0, 255))
     txt_layer = txt_layer.crop(txt_layer.getbbox())
@@ -134,7 +135,7 @@ leg = Image.open(BASE / "Figure3_legend.png").convert("RGBA")
 _la = np.array(leg); _ly, _lx = np.nonzero(_la[:, :, 3] > 0)
 leg = leg.crop((_lx.min(), _ly.min(), _lx.max() + 1, _ly.max() + 1))
 lw, lh = leg.size
-M = 25  # Clearance
+M = 50  # Clearance
 occ = np.any(np.array(final) < 250, axis=2)
 occ = np.pad(occ, ((0, max(0, lh + M - occ.shape[0])), (0, lw + M)), constant_values=False)
 x_best = final.width
@@ -149,17 +150,18 @@ fin.alpha_composite(leg, (x_best, 0))
 final = fin.convert("RGB")
 
 # White border
-B = 40
+B = 80
 bordered = Image.new("RGB", (final.width + 2 * B, final.height + 2 * B), "white")
 bordered.paste(final, (B, B))
 final = bordered
 final_arr = np.array(final)
 nz = np.any(final_arr < 250, axis=2)
 ys2, xs2 = np.nonzero(nz)
-b = 30
+b = 60
 crop_box = (max(xs2.min() - b, 0), max(ys2.min() - b, 0),
             min(xs2.max() + b, final.width), min(ys2.max() + b, final.height))
 final = final.crop(crop_box)
 
-final.save(OUT_PNG, dpi=(300, 300))
+final.save(OUT_PNG, dpi=(DPI, DPI))
+final.save(BASE / "Figure3_final.pdf", resolution=DPI)
 print(f"Saved: {OUT_PNG} ({final.width}x{final.height})")
