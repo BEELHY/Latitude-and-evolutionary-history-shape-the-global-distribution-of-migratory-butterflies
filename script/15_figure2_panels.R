@@ -38,19 +38,34 @@ final_df <- trait_range %>%
 final_df_lat <- final_df %>%
   left_join(df_lat_sp %>% dplyr::select(species, abs_lat), by = "species")
 
-BASE_SIZE <- 7
+BASE_SIZE <- 12  # text size once the figure is placed at 6.5 in width (manuscript body text)
 theme_fig2 <- theme_classic(base_size = BASE_SIZE, base_family = "Arial") +
   theme(
     axis.line = element_line(linewidth = 0.3),
     axis.ticks = element_line(linewidth = 0.3),
-    axis.text = element_text(colour = "black", size = BASE_SIZE - 0.5),
+    axis.text = element_text(colour = "black", size = BASE_SIZE),
+    axis.title = element_text(size = BASE_SIZE),
     legend.background = element_blank(),
     legend.key.size = unit(2.6, "mm"),
-    legend.text = element_text(size = BASE_SIZE - 1),
-    legend.title = element_text(size = BASE_SIZE - 1),
-    legend.position = "inside",
+    legend.text = element_text(size = BASE_SIZE),
+    legend.title = element_text(size = BASE_SIZE),
+    legend.position = "top", legend.justification = "left", legend.direction = "horizontal",
+    legend.margin = margin(0, 0, 0, 0), legend.box.spacing = unit(1, "mm"),
     plot.margin = margin(4, 6, 4, 4)
   )
+
+# Horizontal colour bar with the minimum and maximum written at its two ends (as in Fig. 1)
+end_bar <- function(lo, hi, title) {
+  ggplot(data.frame(x = seq(0, 1, length.out = 256))) +
+    geom_raster(aes(x = x, y = 0, fill = x)) +
+    scale_fill_viridis_c(guide = "none") +
+    annotate("rect", xmin = 0, xmax = 1, ymin = -0.5, ymax = 0.5, fill = NA, colour = "black", linewidth = 0.2) +
+    annotate("text", x = -0.03, y = 0, label = lo, hjust = 1, size = BASE_SIZE / .pt, family = "Arial") +
+    annotate("text", x = 1.03, y = 0, label = hi, hjust = 0, size = BASE_SIZE / .pt, family = "Arial") +
+    annotate("text", x = 0.5, y = 1.1, label = title, vjust = 0, size = BASE_SIZE / .pt, family = "Arial") +
+    coord_cartesian(xlim = c(0, 1), ylim = c(-0.5, 0.5), expand = FALSE, clip = "off") +
+    theme_void()
+}
 lab_range <- expression("Range size (" * log[10] * ", " * km^2 * ")")
 lab_ws <- function(w) bquote(.(w) * " (" * log[10] * ", cm)")
 
@@ -72,9 +87,13 @@ p2a <- ggplot() +
             color = "black", linewidth = 0.6) +
   labs(x = "Mean proportion of range in the tropics", y = lab_range,
        color = "Temperature\nseasonality") +
-  guides(color = guide_colourbar(barwidth = unit(1.6, "mm"), barheight = unit(9, "mm"))) +
+  guides(color = "none") +
   theme_fig2 +
-  theme(legend.position.inside = c(0.99, 0.99), legend.justification.inside = c(1, 1))
+  theme(plot.margin = margin(34, 8, 4, 4))
+bio4_rng <- range(final_df$mean_bio4, na.rm = TRUE)
+p2a <- p2a + inset_element(end_bar(round(bio4_rng[1]), round(bio4_rng[2]), "Temperature seasonality"),
+                           left = 0.30, right = 0.78, bottom = 1.035, top = 1.085, align_to = "panel",
+                           clip = FALSE, ignore_tag = TRUE)
 
 # Panel b
 m_lat_L <- lmer(log10(WS_L) ~ abs_lat + (1 | Family),
@@ -99,12 +118,11 @@ p2b <- ggplot() +
   geom_point(data = df_plot2b, aes(x = abs_lat, y = log10(WS_value), color = WS_type),
              alpha = 0.55, size = 0.8, stroke = 0) +
   geom_line(data = df_preds2b, aes(x = abs_lat, y = log10_WS, color = WS_type), linewidth = 0.6) +
-  scale_color_manual(values = c("Lower" = "#56B4E9", "Upper" = "grey20")) +
-  scale_fill_manual(values = c("Lower" = "#56B4E9", "Upper" = "grey20")) +
+  scale_color_manual(values = c("Lower" = viridisLite::viridis(5)[4], "Upper" = viridisLite::viridis(5)[1])) +
+  scale_fill_manual(values = c("Lower" = viridisLite::viridis(5)[4], "Upper" = viridisLite::viridis(5)[1])) +
   labs(x = "Absolute latitude (°)", y = lab_ws("Wingspan"),
        color = "Wingspan", fill = "Wingspan") +
-  theme_fig2 +
-  theme(legend.position.inside = c(0.99, 0.99), legend.justification.inside = c(1, 1))
+  theme_fig2
 
 # Panel c
 m_interact <- lmer(log10(range_km2) ~ abs_lat * log10(WS_L) + prop_within + season + (1 | species),
@@ -126,38 +144,39 @@ p2c <- ggplot(pred_c, aes(x = WS_L, y = fit, color = lat_group, fill = lat_group
   labs(x = lab_ws("Lower wingspan"), y = lab_range,
        color = "Absolute latitude", fill = "Absolute latitude") +
   guides(color = guide_legend(nrow = 1), fill = guide_legend(nrow = 1)) +
-  theme_fig2 +
-  theme(legend.position.inside = c(0.01, 0.99), legend.justification.inside = c(0, 1),
-        legend.direction = "horizontal", legend.title.position = "top")
+  theme_fig2
 
 # Panel d: main GAM (black only; filled = 95% CI excludes zero)
 forest_df <- read_csv("output/phylo_export/main_model_forest_data_built_ref.csv", show_col_types = FALSE) %>%
-  mutate(variable = recode(variable, "Bio_4" = "Temperature seasonality", "Bio_15" = "Precipitation seasonality",
-                           "HII" = "Human influence", "Trees" = "Forest", "Shrubs" = "Shrubland"),
+  mutate(variable = recode(variable, "Bio_4" = "Temperature\nseasonality", "Bio_15" = "Precipitation\nseasonality",
+                           "HII" = "Human\ninfluence", "Trees" = "Forest", "Shrubs" = "Shrubland"),
          group = factor(ifelse(type == "Environmental", "Environment", "Land cover\n(vs built-up)"),
                         levels = c("Environment", "Land cover\n(vs built-up)")),
-         variable = factor(variable, levels = rev(c("Temperature seasonality", "Precipitation seasonality",
-                                                    "Elevation", "Human influence",
+         variable = factor(variable, levels = rev(c("Temperature\nseasonality", "Precipitation\nseasonality",
+                                                    "Elevation", "Human\ninfluence",
                                                     "Cropland", "Grassland", "Shrubland", "Forest"))))
 
 p2d <- ggplot(forest_df, aes(x = estimate, y = variable, shape = sig)) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey50", linewidth = 0.3) +
-  geom_errorbarh(aes(xmin = ci_lo, xmax = ci_hi), height = 0.25, linewidth = 0.4, colour = "black") +
-  geom_point(size = 1.4, colour = "black", fill = "white", stroke = 0.4) +
-  scale_shape_manual(values = c("Significant" = 16, "Non-significant" = 21), guide = "none") +
+  geom_errorbarh(aes(xmin = ci_lo, xmax = ci_hi), height = 0.25, linewidth = 0.5, colour = "black") +
+  geom_point(size = 2.2, colour = "black", fill = "white", stroke = 0.6) +
+  scale_shape_manual(values = c("Significant" = 16, "Non-significant" = 21), name = NULL,
+                     breaks = c("Significant", "Non-significant"), labels = c("P < 0.05", "P ≥ 0.05")) +
   facet_grid(group ~ ., scales = "free_y", space = "free_y") +
-  labs(x = "Coefficient estimate (95% confidence interval)", y = NULL) +
+  labs(x = "Coefficient estimate\n(95% confidence interval)", y = NULL) +
   theme_fig2 +
-  theme(strip.background = element_blank(), strip.text.y = element_text(angle = 0, hjust = 0, size = BASE_SIZE - 0.5),
-        panel.spacing.y = unit(2, "mm"))
+  theme(strip.background = element_blank(), strip.text = element_blank(), panel.spacing.y = unit(3, "mm"),
+        axis.text.y = element_text(lineheight = 0.85),
+        legend.position = "inside", legend.position.inside = c(0.02, 0.02), legend.justification.inside = c(0, 0),
+        legend.direction = "vertical")
 
-# Compose Figure 2 (180 mm wide)
-fig2 <- (p2a + p2b) / (p2c + p2d) +
+# Compose Figure 2 (6.5 in wide, the text width of the manuscript)
+fig2 <- (p2a + p2b) / (p2c + p2d) + plot_layout(heights = c(1, 1.3)) +
   plot_annotation(tag_levels = "a") &
-  theme(plot.tag = element_text(face = "bold", size = 9, family = "Arial"))
-ggsave(file.path(out_dir, "Figure2_final.png"), fig2, width = 180, height = 150, units = "mm",
+  theme(plot.tag = element_text(face = "bold", size = BASE_SIZE, family = "Arial"))
+ggsave(file.path(out_dir, "Figure2_final.png"), fig2, width = 6.5, height = 7.4, units = "in",
        dpi = 600, device = ragg::agg_png, bg = "white")
-ggsave(file.path(out_dir, "Figure2_final.pdf"), fig2, width = 180, height = 150, units = "mm",
+ggsave(file.path(out_dir, "Figure2_final.pdf"), fig2, width = 6.5, height = 7.4, units = "in",
        device = cairo_pdf)
 cat("Saved Figure 2 to", out_dir, "\n")
 

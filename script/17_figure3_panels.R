@@ -121,13 +121,18 @@ p_iter <- p_iter +
     plot.margin = margin(4, 4, 4, 4)
   )
 
-# Export legend separately
-g_full <- ggplotGrob(p_iter)
-legend_grob <- g_full$grobs[[grep("guide-box", g_full$layout$name)[1]]]
-png(file.path(out_dir, "Figure3_legend.png"), width = 4, height = 4,
-    units = "in", res = DPI, bg = "transparent")
-grid::grid.draw(legend_grob)
-dev.off()
+# Legend: horizontal colour bar with minimum and maximum at its ends (as in Figs 1 and 2a), 12 pt
+p_leg <- ggplot(data.frame(x = seq(0, 1, length.out = 256))) +
+  geom_raster(aes(x = x, y = 0, fill = x)) +
+  scale_fill_viridis_c(guide = "none") +
+  annotate("rect", xmin = 0, xmax = 1, ymin = -0.5, ymax = 0.5, fill = NA, colour = "black", linewidth = 0.3) +
+  annotate("text", x = -0.04, y = 0, label = sprintf("%.1f", range_lim[1]), hjust = 1, size = 12 / .pt, family = "Arial") +
+  annotate("text", x = 1.04, y = 0, label = sprintf("%.1f", range_lim[2]), hjust = 0, size = 12 / .pt, family = "Arial") +
+  annotate("text", x = 0.5, y = 1.1, label = 'Range~size~(log[10]*","~km^2)', parse = TRUE, vjust = 0,
+           size = 12 / .pt, family = "Arial") +
+  coord_cartesian(xlim = c(0, 1), ylim = c(-0.5, 0.5), expand = FALSE, clip = "off") +
+  theme_void() + theme(plot.margin = margin(22, 40, 2, 40))
+ggsave(file.path(out_dir, "Figure3_legend.png"), p_leg, width = 2.6, height = 0.45, dpi = DPI, bg = "transparent")
 p_iter <- p_iter + theme(legend.position = "none")
 
 # Histogram, all species
@@ -136,7 +141,7 @@ p_hist <- ggplot(df_plot_final, aes(x = Range_Val)) +
   scale_fill_viridis_c(option = "viridis", limits = range_lim, oob = scales::squish) +
   scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
   labs(x = expression("Range size (" * log[10] * ", " * km^2 * ")"), y = "Species") +
-  theme_classic(base_size = BASE_SIZE - 2) +
+  theme_classic(base_size = 12, base_family = "Arial") +
   theme(panel.background = element_blank(), plot.background = element_blank(),
         axis.line = element_line(linewidth = 0.4, colour = "black"),
         axis.ticks = element_line(linewidth = 0.4, colour = "black"),
@@ -147,7 +152,7 @@ IMG_PX <- 2200
 ggsave(file.path(out_dir, "Figure3_base.png"), p_iter,
        width = IMG_PX / 300, height = IMG_PX / 300, dpi = DPI, bg = "white")
 ggsave(file.path(out_dir, "Figure3_hist.png"), p_hist,
-       width = 1.95, height = 1.5,  # Native size keeps text at 10 pt
+       width = 2.3, height = 1.8,  # native size: text at 12 pt
        dpi = DPI, bg = "transparent")
 cat(sprintf("Saved: %s and Figure3_hist.png\n", file.path(out_dir, "Figure3_base.png")))
 cat("Next: run script/18_figure3_compose.py to overlay family labels + butterfly photos\n")
