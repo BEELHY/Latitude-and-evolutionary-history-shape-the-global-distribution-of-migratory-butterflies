@@ -1,7 +1,6 @@
-# Figure 1: seasonal-switching richness (Robinson maps, latitude profile, seasonal net change).
+# Figure 1: Seasonal-switching richness and directional net flux.
 
 import os
-import sys
 import glob
 import re
 import warnings
@@ -16,15 +15,23 @@ import matplotlib as mpl
 import cartopy.crs as ccrs
 
 warnings.filterwarnings('ignore')
+os.environ['SHAPE_RESTORE_SHX'] = 'YES'
+
+FS = 7
+FS_TAG = 8
 
 plt.rcParams.update({
     'font.family': 'sans-serif',
-    'font.sans-serif': ['Arial'],
-    'font.size': 7,
-    'axes.labelsize': 7,
-    'axes.titlesize': 7,
-    'xtick.labelsize': 7,
-    'ytick.labelsize': 7,
+    'font.sans-serif': ['Arial', 'DejaVu Sans'],
+    'font.size': FS,
+    'text.color': 'black',
+    'axes.labelcolor': 'black',
+    'xtick.color': 'black',
+    'ytick.color': 'black',
+    'axes.labelsize': FS,
+    'axes.titlesize': FS,
+    'xtick.labelsize': FS,
+    'ytick.labelsize': FS,
     'axes.linewidth': 0.5,
     'xtick.major.width': 0.5,
     'ytick.major.width': 0.5,
@@ -35,67 +42,110 @@ plt.rcParams.update({
     'figure.facecolor': 'white'
 })
 
-# Paths (raw maps not shared)
-shp_path = "data/world-administrative-boundaries/world-administrative-boundaries.shp"
-csv_path = "output/df_lat_sp.csv"
-data_dir = "data/SuitabilityMaps_MigratorySpecies"
-output_dir = "output/Manuscript/figure1_panels"
-os.makedirs(output_dir, exist_ok=True)
-cache = sys.argv[1] if len(sys.argv) > 1 else None  # optional .npz of precomputed grids
+# Paths
+DATA_DIR = "data/SuitabilityMaps_MigratorySpecies"
+if not os.path.exists(DATA_DIR):
+    DATA_DIR = "SuitabilityMaps_MigratorySpecies"
 
-if cache and os.path.exists(cache):
-    z = np.load(cache)
-    migratory_richness_map = z['rich'].astype('float32')
-    S = {s: z[f'S{s}'].astype('float32') for s in [1, 2, 3, 4]}
-else:
-    df_ref = pd.read_csv(csv_path)
-    keep = set(df_ref.species)
-    all_files = glob.glob(os.path.join(data_dir, "Binary_S*.tif"))
-    species_dict = {}
-    for f in all_files:
-        m = re.match(r"Binary_S(\d)(.*)\.tif$", os.path.basename(f))
-        if m and m.group(2) in keep:
-            species_dict.setdefault(m.group(2), {})[int(m.group(1))] = f
+CSV_PATH = "output/df_lat_sp.csv"
+if not os.path.exists(CSV_PATH):
+    CSV_PATH = "updatedata/species_season_metrics.csv"
 
-    # Native-resolution master grid
-    with rasterio.open(all_files[0]) as src:
-        height, width = int(180 / src.res[1]), int(360 / src.res[0])
-    master_transform = from_bounds(-180, -90, 180, 90, width, height)
+SHP_PATH = "data/world-administrative-boundaries/world-administrative-boundaries.shp"
+OUTPUT_DIR = "output/Manuscript/figure1_panels"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    migratory_richness_map = np.zeros((height, width), dtype='float32')
-    S = {s: np.zeros((height, width), dtype='float32') for s in [1, 2, 3, 4]}
-    for sp, seasons in species_dict.items():
-        t_max = len(seasons)
-        temp = {s: np.zeros((height, width), dtype='float32') for s in [1, 2, 3, 4]}
-        for s, path in seasons.items():
-            with rasterio.open(path) as src:
-                reproject(src.read(1), temp[s], src_transform=src.transform, src_crs=src.crs,
-                          dst_transform=master_transform, dst_crs=src.crs, resampling=Resampling.nearest)
-        p_sum = sum(temp.values())
-        mig_mask = np.where((p_sum > 0) & (p_sum < t_max), 1, 0).astype('float32')
-        if np.sum(mig_mask) == 0:
-            continue
-        migratory_richness_map += mig_mask
-        for s in [1, 2, 3, 4]:
-            S[s] += (temp[s] * mig_mask)
+# 1. Ingestion and grid harmonization (NoData cleaned)
+print("[1/3] Processing species suitability layers...")
+df_ref = pd.read_csv(CSV_PATH)
+sp_col = [c for c in df_ref.columns if 'species' in c.lower()][0]
+keep = set(df_ref[sp_col].str.replace(' ', '_'))
 
-height = migratory_richness_map.shape[0]
+all_files = glob.glob(os.path.join(DATA_DIR, "Binary_S*.tif"))
+species_dict = {}
+
+for f in all_files:
+    m = re.match(r"Binary_S(\d)(.*)\.tif$", os.path.basename(f))
+    if m:
+        s = int(m.group(1))
+        sp_clean = m.group(2).lstrip('_')
+        if sp_clean in keep or sp_clean.replace('_', ' ') in keep:
+            species_dict.setdefault(sp_clean, {})[s] = f
+
+with rasterio.open(all_files[0]) as src:
+    height, width = int(180 / src.res[1]), int(360 / src.res[0])
+master_transform = from_bounds(-180, -90, 180, 90, width, height)
+
+migratory_richness_map = np.zeros((height, width), dtype='float32')
+S = {s: np.zeros((height, width), dtype='float32') for s in [1, 2, 3, 4]}
+
+for idx, (sp, seasons) in enumerate(species_dict.items(), start=1):
+    t_max = len(seasons)
+    temp = {s: np.zeros((height, width), dtype='float32') for s in [1, 2, 3, 4]}
+    for s, path in seasons.items():
+        with rasterio.open(path) as src:
+            raw_arr = src.read(1)
+            clean_arr = (raw_arr == 1.0).astype('float32')
+            reproject(
+                clean_arr, temp[s],
+                src_transform=src.transform, src_crs=src.crs,
+                dst_transform=master_transform, dst_crs=src.crs,
+                resampling=Resampling.nearest
+            )
+    p_sum = sum(temp.values())
+    mig_mask = np.where((p_sum > 0) & (p_sum < t_max), 1.0, 0.0).astype('float32')
+    if np.sum(mig_mask) == 0:
+        continue
+    migratory_richness_map += mig_mask
+    for s in [1, 2, 3, 4]:
+        S[s] += (temp[s] * mig_mask)
+
 max_richness = int(np.max(migratory_richness_map))
-world = gpd.read_file(shp_path).dissolve()
 
-# Seasonal net change: continuous viridis on a symmetric log scale so that small changes stay visible
-labels = [("S2–S1", S[2] - S[1]), ("S3–S2", S[3] - S[2]), ("S4–S3", S[4] - S[3]), ("S1–S4", S[1] - S[4])]
-c_min = int(min(d.min() for _, d in labels)); c_max = int(max(d.max() for _, d in labels))
-print(f"Maximum richness: {max_richness}; net change range {c_min} to {c_max}")
-c_norm = mpl.colors.SymLogNorm(linthresh=1, linscale=0.5, vmin=c_min, vmax=c_max, base=10)
+# Raw seasonal fluxes
+raw_spring = S[2] - S[1]
+raw_summer = S[3] - S[2]
+raw_autumn = S[4] - S[3]
+raw_winter = S[1] - S[4]
 
+raw_all = [raw_spring, raw_summer, raw_autumn, raw_winter]
+c_min_magnitude = int(abs(min(d.min() for d in raw_all)))
+c_max_magnitude = int(abs(max(d.max() for d in raw_all)))
+
+gain_spring = np.log1p(np.maximum(0, raw_spring))
+gain_summer = np.log1p(np.maximum(0, raw_summer))
+gain_autumn = np.log1p(np.maximum(0, raw_autumn))
+gain_winter = np.log1p(np.maximum(0, raw_winter))
+
+loss_spring = np.log1p(np.maximum(0, -raw_spring))
+loss_summer = np.log1p(np.maximum(0, -raw_summer))
+loss_autumn = np.log1p(np.maximum(0, -raw_autumn))
+loss_winter = np.log1p(np.maximum(0, -raw_winter))
+
+max_gain_log = max(gain_spring.max(), gain_summer.max(), gain_autumn.max(), gain_winter.max())
+max_loss_log = max(loss_spring.max(), loss_summer.max(), loss_autumn.max(), loss_winter.max())
+
+try:
+    world = gpd.read_file(SHP_PATH).dissolve()
+except Exception:
+    import cartopy.feature as cfeature
+    from shapely.ops import unary_union
+    land_geom = list(cfeature.NaturalEarthFeature('physical', 'land', '110m').geometries())
+    world = gpd.GeoDataFrame(geometry=[unary_union(land_geom)], crs="EPSG:4326")
+
+# 2. Rendering functions
 robinson = ccrs.Robinson(central_longitude=0)
 pc = ccrs.PlateCarree()
-LAND = '#e8e8e8'
-P_STEP = 2  # every 2nd cell (5 arc-min) for rendering
-FS = 7      # Nature: 5-7 pt text at the final width of 183 mm
-FS_TAG = 8  # panel labels 8 pt bold
 
+SEASON_TRANSITIONS = [
+    ('#00e5ff', [0.00, 0.90, 1.00], 'S2–S1'),
+    ('#ff00e5', [1.00, 0.00, 0.90], 'S3–S2'),
+    ('#ffd600', [1.00, 0.84, 0.00], 'S4–S3'),
+    ('#2b66ff', [0.17, 0.40, 1.00], 'S1–S4')
+]
+
+LAND = '#e8e8e8'
+P_STEP = 2
 
 def base_map(ax, equator=True):
     ax.set_extent([-180, 180, -60, 90], crs=pc)
@@ -104,76 +154,81 @@ def base_map(ax, equator=True):
     if equator:
         ax.plot([-180, 180], [0, 0], transform=pc, color='0.35', lw=0.4, ls=(0, (3, 3)), zorder=3)
 
-
 def raster(ax, arr, **kw):
     return ax.imshow(arr[::P_STEP, ::P_STEP], origin='upper', extent=[-180, 180, -90, 90],
-                     transform=pc, interpolation='nearest', regrid_shape=2400, zorder=2, **kw)
+                     transform=pc, interpolation='nearest', regrid_shape=1400, zorder=2, **kw)
 
-
-def title(x, y, letter, text):
-    fig.text(x, y, letter, fontsize=FS_TAG, fontweight='bold', va='top', ha='left')
-    fig.text(x + 0.13 / FW, y, text, fontsize=FS, va='top', ha='left', linespacing=1.15)
-
-
-def end_bar(cax, mappable, lo, hi, label=None, mid=None):
-    """Horizontal colour bar without ticks; minimum and maximum written at its two ends."""
-    cb = fig.colorbar(mappable, cax=cax, orientation='horizontal', ticks=[])
+def end_bar(fig_obj, cax, mappable, lo, hi, label=None):
+    cb = fig_obj.colorbar(mappable, cax=cax, orientation='horizontal', ticks=[])
     cb.ax.minorticks_off()
     cb.ax.xaxis.set_ticks([], minor=True)
     cb.outline.set_linewidth(0.4)
-    cax.text(-0.03, 0.5, lo, transform=cax.transAxes, ha='right', va='center', fontsize=FS)
-    cax.text(1.03, 0.5, hi, transform=cax.transAxes, ha='left', va='center', fontsize=FS)
+    cax.text(-0.03, 0.5, lo, transform=cax.transAxes, ha='right', va='center', fontsize=FS, color='black')
+    cax.text(1.03, 0.5, hi, transform=cax.transAxes, ha='left', va='center', fontsize=FS, color='black')
     if label:
-        cax.text(0.5, 1.5, label, transform=cax.transAxes, ha='center', va='bottom', fontsize=FS)
-    if mid is not None:
-        x = cb.norm(mid[0]) if not callable(getattr(cb.norm, 'inverse', None)) else cb.norm(mid[0])
-        cax.plot([x, x], [0, 1], transform=cax.transAxes, color='white', lw=0.5)
-        cax.text(x, -0.4, mid[1], transform=cax.transAxes, ha='center', va='top', fontsize=FS)
+        cax.text(0.5, 1.5, label, transform=cax.transAxes, ha='center', va='bottom', fontsize=FS, color='black')
     return cb
 
+def create_unidirectional_composite_dark_base(d1, d2, d3, d4, rich_mask, max_val):
+    d1_s = d1[::P_STEP, ::P_STEP]
+    d2_s = d2[::P_STEP, ::P_STEP]
+    d3_s = d3[::P_STEP, ::P_STEP]
+    d4_s = d4[::P_STEP, ::P_STEP]
+    occ_mask = rich_mask[::P_STEP, ::P_STEP] > 0
 
-# Layout in inches from the top-left corner, following slide 1 of Figure1_final.pptx, at the Nature
-# double-column width (183 mm; maximum height 170 mm).
-# Maps span 60 S - 90 N; panel b shares the vertical extent of map a, so latitudes line up.
-FW, FH = 183 / 25.4, 6.62  # 168 mm tall
+    base_gray = 0.45
+    r = np.full(d1_s.shape, base_gray, dtype='float32')
+    g = np.full(d1_s.shape, base_gray, dtype='float32')
+    b = np.full(d1_s.shape, base_gray, dtype='float32')
+    scale = max_val * 0.70 if max_val > 0 else 1.0
+
+    def apply_channel(data, target_rgb):
+        amt = np.clip(data / scale, 0.0, 1.0)
+        return (target_rgb[0] - base_gray) * amt, (target_rgb[1] - base_gray) * amt, (target_rgb[2] - base_gray) * amt
+
+    dr1, dg1, db1 = apply_channel(d1_s, SEASON_TRANSITIONS[0][1])
+    dr2, dg2, db2 = apply_channel(d2_s, SEASON_TRANSITIONS[1][1])
+    dr3, dg3, db3 = apply_channel(d3_s, SEASON_TRANSITIONS[2][1])
+    dr4, dg4, db4 = apply_channel(d4_s, SEASON_TRANSITIONS[3][1])
+
+    r = np.clip(r + dr1 + dr2 + dr3 + dr4, 0.0, 1.0)
+    g = np.clip(g + dg1 + dg2 + dg3 + db4, 0.0, 1.0)
+    b = np.clip(b + db1 + db2 + db3 + db4, 0.0, 1.0)
+    return np.stack([r, g, b, occ_mask.astype('float32')], axis=-1)
+
+# 3. Composition
+print("[2/3] Rendering Figure 1...")
+FW, FH = 183 / 25.4, 4.65
 fig = plt.figure(figsize=(FW, FH))
+
 ROB_W = 2 * robinson.transform_point(180, 0, pc)[0]
 rob_y = lambda lat: robinson.transform_point(0, lat, pc)[1]
 MAP_ASPECT = ROB_W / (rob_y(90) - rob_y(-60))
 
-
 def box(x, y, w, h, **kw):
     return fig.add_axes([x / FW, 1 - (y + h) / FH, w / FW, h / FH], **kw)
-
 
 def at(x, y):
     return x / FW, 1 - y / FH
 
+def title(x, y, letter, text):
+    fig.text(x, y, letter, fontsize=FS_TAG, fontweight='bold', va='top', ha='left', color='black')
+    fig.text(x + 0.13 / FW, y, text, fontsize=FS, va='top', ha='left', linespacing=1.15, color='black')
 
-A_TOP, A_W = 0.34, 5.0
+# Panel a
+A_TOP, A_W = 0.32, 5.0
 A_H = A_W / MAP_ASPECT
 B_X, B_W = 5.5, 1.62
 title(*at(0.02, 0.04), 'a', 'Seasonal-switching richness')
 ax_a = box(0.0, A_TOP, A_W, A_H, projection=robinson)
 cax_a = box(3.3, 0.16, 1.0, 0.07)
-title(*at(B_X - 0.55, 0.04), 'b', 'Mean seasonal-switching\nrichness (n species)')
-ax_b = box(B_X, A_TOP, B_W, A_H)
-C_TOP = A_TOP + A_H + 0.3
-title(*at(0.02, C_TOP), 'c', 'Net species flux (gain − loss)')
-cax_c = box(3.3, C_TOP + 0.12, 1.0, 0.07)  # titled like the colour bar of a
-MAP_W = 3.55
-MAP_H = MAP_W / MAP_ASPECT
-ROW1 = C_TOP + 0.42
-ROW2 = ROW1 + MAP_H + 0.2
-axes_c = [box(x, y, MAP_W, MAP_H, projection=robinson) for y in (ROW1, ROW2) for x in (0.0, FW - MAP_W)]
-
-# a
 base_map(ax_a)
 im_a = raster(ax_a, np.ma.masked_equal(migratory_richness_map, 0), cmap='viridis', vmin=1, vmax=max_richness)
-end_bar(cax_a, im_a, '1', str(max_richness), label='Species (n)')
+end_bar(fig, cax_a, im_a, '1', str(max_richness), label='Species (n)')
 
-# b: mean richness across occupied cells within each latitude band, plotted on the Robinson
-# vertical coordinate so that each latitude sits level with map a
+# Panel b
+title(*at(B_X - 0.55, 0.04), 'b', 'Mean seasonal-switching\nrichness (n species)')
+ax_b = box(B_X, A_TOP, B_W, A_H)
 lats = np.linspace(90, -90, height)
 lat_mean = np.array([r[r > 0].mean() if (r > 0).any() else 0.0 for r in migratory_richness_map])
 ys = np.array([rob_y(l) for l in lats])
@@ -183,25 +238,78 @@ ax_b.axhline(0, color='0.35', lw=0.4, ls=(0, (3, 3)))
 ax_b.set_ylim(rob_y(-60), rob_y(90))
 ax_b.set_yticks([rob_y(90), 0, rob_y(-60)])
 ax_b.set_yticklabels(['90°', '0°', '−60°'])
-ax_b.get_yticklabels()[1].set_va('top')  # sits just below the equator line, as in the slide
-ax_b.set_xlim(0, np.ceil(lat_mean.max() / 5) * 5)
-ax_b.set_xticks([0, 15])
+ax_b.get_yticklabels()[1].set_va('top')
+max_x = int(np.ceil(lat_mean.max() / 5) * 5) if lat_mean.max() > 0 else 20
+ax_b.set_xlim(0, max_x)
+ax_b.set_xticks([0, max_x])
 for side in ('top', 'right'):
     ax_b.spines[side].set_visible(False)
-ax_b.tick_params(labelsize=FS)
-# equator carried across the gap between a and b
+ax_b.tick_params(labelsize=FS, colors='black')
+
 y_eq = 1 - (A_TOP + A_H * rob_y(90) / (rob_y(90) - rob_y(-60))) / FH
 fig.add_artist(mpl.lines.Line2D([A_W / FW, B_X / FW], [y_eq, y_eq], color='0.35', lw=0.4, ls=(0, (3, 3))))
 
-# c
-for ax, (lab, d) in zip(axes_c, labels):
-    base_map(ax, equator=False)
-    raster(ax, np.ma.masked_equal(d, 0), cmap='viridis', norm=c_norm)
-    ax.set_title(lab, pad=2, fontsize=FS)
-sm = mpl.cm.ScalarMappable(norm=c_norm, cmap='viridis')
-end_bar(cax_c, sm, f'−{abs(c_min)}', str(c_max), label='Species (n)', mid=(0, '0'))
+# Panels c & d
+C_TOP = A_TOP + A_H + 0.32
+SUB_W = 3.45
+SUB_H = SUB_W / MAP_ASPECT
+MAP_Y = C_TOP + 0.22
+
+def render_unified_header(start_x, sub_top, title_letter, title_text, endpoint_val, endpoint_type):
+    title(*at(start_x, sub_top), title_letter, title_text)
+    rx_start = start_x + 1.35
+    row1_y = sub_top + 0.015
+    y1_norm = 1 - row1_y / FH
+    box_sz = 0.050 / FH
+    for idx, (col_hex, _, code_str) in enumerate(SEASON_TRANSITIONS):
+        lx = rx_start + idx * 0.52
+        rect = mpl.patches.Rectangle(
+            (lx / FW, y1_norm - box_sz / 2), box_sz * (FH / FW), box_sz,
+            facecolor=col_hex, edgecolor='none', transform=fig.transFigure
+        )
+        fig.patches.append(rect)
+        fig.text((lx + 0.070) / FW, y1_norm, code_str, fontsize=FS, va='center', ha='left', color='black')
+
+    row2_y = sub_top + 0.105
+    y2_norm = 1 - row2_y / FH
+    sq_sz = 0.040 / FH
+    rect_zero = mpl.patches.Rectangle(
+        (rx_start / FW, y2_norm - sq_sz / 2), sq_sz * (FH / FW), sq_sz,
+        facecolor='#454545', edgecolor='none', transform=fig.transFigure
+    )
+    fig.patches.append(rect_zero)
+    fig.text((rx_start + 0.055) / FW, y2_norm, '0', fontsize=FS, va='center', ha='left', color='black')
+
+    arrow = mpl.patches.FancyArrowPatch(
+        ((rx_start + 0.16) / FW, y2_norm), ((rx_start + 1.05) / FW, y2_norm),
+        arrowstyle='->,head_width=2.5,head_length=3.5', color='black', lw=0.5,
+        transform=fig.transFigure
+    )
+    fig.patches.append(arrow)
+    fig.text((rx_start + 1.10) / FW, y2_norm, f'{endpoint_val} ({endpoint_type})',
+             fontsize=FS, va='center', ha='left', color='black')
+
+render_unified_header(0.04, C_TOP, 'c', 'Net species gain', c_max_magnitude, 'gain')
+ax_c = box(0.04, MAP_Y, SUB_W, SUB_H, projection=robinson)
+base_map(ax_c, equator=False)
+rgba_gain = create_unidirectional_composite_dark_base(
+    gain_spring, gain_summer, gain_autumn, gain_winter, migratory_richness_map, max_gain_log
+)
+ax_c.imshow(rgba_gain, origin='upper', extent=[-180, 180, -90, 90],
+            transform=pc, interpolation='nearest', regrid_shape=1400, zorder=2)
+
+RIGHT_X = FW - SUB_W - 0.04
+render_unified_header(RIGHT_X, C_TOP, 'd', 'Net species loss', c_min_magnitude, 'loss')
+ax_d = box(RIGHT_X, MAP_Y, SUB_W, SUB_H, projection=robinson)
+base_map(ax_d, equator=False)
+rgba_loss = create_unidirectional_composite_dark_base(
+    loss_spring, loss_summer, loss_autumn, loss_winter, migratory_richness_map, max_loss_log
+)
+ax_d.imshow(rgba_loss, origin='upper', extent=[-180, 180, -90, 90],
+            transform=pc, interpolation='nearest', regrid_shape=1400, zorder=2)
 
 for ext in ('png', 'pdf'):
-    fig.savefig(os.path.join(output_dir, f"Figure1.{ext}"), dpi=600)
+    fig.savefig(os.path.join(OUTPUT_DIR, f"Figure1.{ext}"), dpi=400)
 plt.close(fig)
-print(f"Saved {output_dir}/Figure1.png/.pdf")
+
+print(f"[3/3] [DONE] Figure 1 saved to: {OUTPUT_DIR}")
