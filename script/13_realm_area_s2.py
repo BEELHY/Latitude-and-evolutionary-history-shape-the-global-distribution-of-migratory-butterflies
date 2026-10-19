@@ -1,4 +1,4 @@
-# Equal-area realm metrics (Fig. S2).
+# Equal-area realm metrics and Figure S2.
 
 import os
 import glob
@@ -17,16 +17,22 @@ from tqdm import tqdm
 
 warnings.filterwarnings('ignore')
 
-# Paths (raw maps not shared)
+# Paths
 DATA_DIR = "data/SuitabilityMaps_MigratorySpecies"
+if not os.path.exists(DATA_DIR):
+    DATA_DIR = "SuitabilityMaps_MigratorySpecies"
+
 CSV_PATH = "output/df_lat_sp.csv"
+if not os.path.exists(CSV_PATH):
+    CSV_PATH = "updatedata/species_season_metrics.csv"
+
 ZOO_SHP = "data/CMEC_regions/Regions.shp"
 OUTPUT_DIR = "output/realm_area"
-
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+
 GRID_RES = 0.5
 
-# Regions to realms (Holt 2013)
+# Regions to realms (Holt et al. 2013)
 REGION_TO_REALM = {
     'North American': 'Nearctic',
     'Mexican': 'Nearctic',
@@ -50,21 +56,22 @@ REGION_TO_REALM = {
     'Polynesian': 'Oceanian'
 }
 
-# Richness grid (0.5 degree)
-print("[1/5] Seasonal-switching richness...")
+# 1. Seasonal-switching richness grid (0.5 degree, NoData cleaned)
+print("[1/5] Calculating seasonal-switching richness (0.5 degree)...")
 df_ref = pd.read_csv(CSV_PATH)
-sp_to_fam = pd.Series(df_ref.Family.values, index=df_ref.species).to_dict()
-all_files = glob.glob(os.path.join(DATA_DIR, "Binary_S*.tif"))
+sp_col = [c for c in df_ref.columns if 'species' in c.lower()][0]
+valid_species = set(df_ref[sp_col].str.replace(' ', '_'))
 
+all_files = glob.glob(os.path.join(DATA_DIR, "Binary_S*.tif"))
 species_dict = {}
+
 for f in all_files:
     m = re.match(r"Binary_S(\d)(.*)\.tif$", os.path.basename(f))
     if m:
-        s, sp = int(m.group(1)), m.group(2)
-        if sp in sp_to_fam:
-            if sp not in species_dict:
-                species_dict[sp] = {}
-            species_dict[sp][s] = f
+        s = int(m.group(1))
+        sp = m.group(2).lstrip('_')
+        if sp in valid_species or sp.replace('_', ' ') in valid_species:
+            species_dict.setdefault(sp, {})[s] = f
 
 with rasterio.open(all_files[0]) as src:
     master_crs = src.crs
@@ -79,8 +86,10 @@ for sp, seasons in tqdm(species_dict.items(), desc="Species"):
     temp = {s: np.zeros((height, width), dtype='float32') for s in [1, 2, 3, 4]}
     for s, path in seasons.items():
         with rasterio.open(path) as src:
+            raw_arr = src.read(1)
+            clean_arr = (raw_arr == 1.0).astype('float32')
             reproject(
-                rasterio.band(src, 1),
+                clean_arr,
                 temp[s],
                 src_transform=src.transform,
                 src_crs=src.crs,
@@ -89,13 +98,13 @@ for sp, seasons in tqdm(species_dict.items(), desc="Species"):
                 resampling=Resampling.nearest
             )
     p_sum = sum(temp.values())
-    mig_mask = np.where((p_sum > 0) & (p_sum < t_max), 1, 0).astype('float32')
+    mig_mask = np.where((p_sum > 0) & (p_sum < t_max), 1.0, 0.0).astype('float32')
     if np.sum(mig_mask) == 0:
         continue
     migratory_richness_map += mig_mask
 
-# Spherical cell area (km2)
-print("\n[2/5] Cell surface area...")
+# 2. Spherical cell area (km2)
+print("[2/5] Calculating spherical surface area...")
 R = 6371.0088
 d_lon_rad = np.radians(GRID_RES)
 row_areas = np.zeros(height, dtype='float32')
@@ -106,12 +115,10 @@ for i in range(height):
 
 cell_area_km2 = np.repeat(row_areas[:, np.newaxis], width, axis=1).astype('float32')
 
-# Global percentile thresholds
 valid_occupied = migratory_richness_map[migratory_richness_map > 0]
 top10_threshold = float(np.percentile(valid_occupied, 90))
 top5_threshold = float(np.percentile(valid_occupied, 95))
 
-# Temporary rasters for masking
 temp_rich_tif = os.path.join(OUTPUT_DIR, "_temp_richness.tif")
 temp_area_tif = os.path.join(OUTPUT_DIR, "_temp_area.tif")
 profile = {
@@ -123,26 +130,24 @@ with rasterio.open(temp_rich_tif, 'w', **profile) as dst:
 with rasterio.open(temp_area_tif, 'w', **profile) as dst:
     dst.write(cell_area_km2, 1)
 
-# Extract per region
-print("\n[3/5] Area and richness per region...")
+# 3. Extract per zoogeographic region
+print("[3/5] Extracting area and richness per region...")
 gdf_regions = gpd.read_file(ZOO_SHP).to_crs(master_crs)
+col_reg = 'Regions' if 'Regions' in gdf_regions.columns else gdf_regions.columns[0]
 
 records_per_pixel = []
 
 with rasterio.open(temp_rich_tif) as src_rich, rasterio.open(temp_area_tif) as src_area:
     for _, row in tqdm(gdf_regions.iterrows(), total=len(gdf_regions), desc="Regions"):
-        region_name = str(row['Regions'])
+        region_name = str(row[col_reg])
         realm_name = REGION_TO_REALM.get(region_name, region_name)
         geom = [row['geometry']]
-
         try:
             r_img, _ = mask(src_rich, geom, crop=True)
             a_img, _ = mask(src_area, geom, crop=True)
-
             r_data = r_img[0]
             a_data = a_img[0]
 
-            # Occupied cells (richness >= 1)
             mig_mask = (r_data > 0)
             if not np.any(mig_mask):
                 continue
@@ -160,15 +165,14 @@ with rasterio.open(temp_rich_tif) as src_rich, rasterio.open(temp_area_tif) as s
         except Exception:
             continue
 
-# Remove temporary rasters
 for tmp in [temp_rich_tif, temp_area_tif]:
     if os.path.exists(tmp):
         os.remove(tmp)
 
 df_all = pd.DataFrame(records_per_pixel)
 
-# Summary tables
-print("\n[4/5] Summary tables...")
+# 4. Summary tables
+print("[4/5] Generating baseline summary tables...")
 
 
 def generate_summary(df, group_col):
@@ -190,7 +194,6 @@ def generate_summary(df, group_col):
             'Migratory_Area_km2': tot_area,
             'Mean_Richness': np.average(rich_vals, weights=area_vals),
             'Max_Richness': int(np.max(rich_vals)),
-            # Fixed richness thresholds
             'Area_ge_5_km2': area_ge_5,
             'Pct_ge_5': (area_ge_5 / tot_area) * 100.0,
             'Area_ge_10_km2': area_ge_10,
@@ -199,7 +202,6 @@ def generate_summary(df, group_col):
             'Pct_ge_15': (area_ge_15 / tot_area) * 100.0,
             'Area_ge_20_km2': area_ge_20,
             'Pct_ge_20': (area_ge_20 / tot_area) * 100.0,
-            # Percentile thresholds
             'Area_Top10Pct_km2': area_top10,
             'Pct_Top10Pct': (area_top10 / tot_area) * 100.0,
             'Area_Top5Pct_km2': area_top5,
@@ -207,58 +209,79 @@ def generate_summary(df, group_col):
         })
 
     df_res = pd.DataFrame(summary_list)
-    # Share of global area
     tot_ge10_global = df_res['Area_ge_10_km2'].sum()
     tot_top5_global = df_res['Area_Top5Pct_km2'].sum()
-    df_res['Global_Share_ge_10_Pct'] = (df_res['Area_ge_10_km2'] / tot_ge10_global) * 100.0
-    df_res['Global_Share_Top5_Pct'] = (df_res['Area_Top5Pct_km2'] / tot_top5_global) * 100.0
+    df_res['Global_Share_ge_10_Pct'] = (df_res['Area_ge_10_km2'] / tot_ge10_global) * 100.0 if tot_ge10_global > 0 else 0.0
+    df_res['Global_Share_Top5_Pct'] = (df_res['Area_Top5Pct_km2'] / tot_top5_global) * 100.0 if tot_top5_global > 0 else 0.0
     return df_res.sort_values('Migratory_Area_km2', ascending=False)
 
 
-# Realm table
 df_realm_summary = generate_summary(df_all, 'Realm')
-csv_realm_summary = os.path.join(OUTPUT_DIR, "11_Realms_Baseline_Summary.csv")
-df_realm_summary.to_csv(csv_realm_summary, index=False)
+df_realm_summary.to_csv(os.path.join(OUTPUT_DIR, "11_Realms_Baseline_Summary.csv"), index=False)
 
-# Region table
+# Update updatedata/realm_area_hotspot_summary.csv
+updatedata_dir = "updatedata"
+if os.path.exists(updatedata_dir):
+    df_realm_summary.to_csv(os.path.join(updatedata_dir, "realm_area_hotspot_summary.csv"), index=False)
+
 df_region_summary = generate_summary(df_all, 'Region')
-csv_region_summary = os.path.join(OUTPUT_DIR, "20_Regions_Baseline_Summary.csv")
-df_region_summary.to_csv(csv_region_summary, index=False)
+df_region_summary.to_csv(os.path.join(OUTPUT_DIR, "20_Regions_Baseline_Summary.csv"), index=False)
 
-# Area by richness, per realm
 df_pivot_realm = df_all.pivot_table(index='Realm', columns='Richness', values='Area_km2', aggfunc='sum').fillna(0.0)
 df_pivot_realm['Total_Area_km2'] = df_pivot_realm.sum(axis=1)
 df_pivot_realm = df_pivot_realm.sort_values('Total_Area_km2', ascending=False)
 df_pivot_realm.to_csv(os.path.join(OUTPUT_DIR, "Realm_Richness_Area_km2_Distribution.csv"))
 
-# Fig. S2 heatmap
-print("\n[5/5] Fig. S2 heatmap...")
-df_norm = df_pivot_realm.drop(columns=['Total_Area_km2'])
-df_norm = df_norm.div(df_norm.sum(axis=1), axis=0) * 100.0
+# 5. Figure S2 (Panel a + b)
+print("[5/5] Rendering Figure S2...")
+fig = plt.figure(figsize=(8.5, 11), dpi=300)
+gs = fig.add_gridspec(2, 1, height_ratios=[1.0, 1.15], hspace=0.25)
 
-plt.figure(figsize=(16, 9))
-sns.set_style("white")
-plot_data = df_norm.iloc[:, :35].reindex(df_pivot_realm.index)
+# Panel a
+ax_a = fig.add_subplot(gs[0])
+df_bar = df_realm_summary.sort_values('Global_Share_ge_10_Pct', ascending=True).copy()
+realms = df_bar['Realm'].values
+y_pos = np.arange(len(realms))
+bar_height = 0.36
+
+bars_global = ax_a.barh(y_pos + bar_height / 2, df_bar['Global_Share_ge_10_Pct'],
+                        height=bar_height, color='#2b7bba', label='% of global high-richness area')
+bars_realm = ax_a.barh(y_pos - bar_height / 2, df_bar['Pct_ge_10'],
+                       height=bar_height, color='#e59e1e', label='% of realm migratory area with ≥10 species')
+
+for idx, (b_g, b_r) in enumerate(zip(bars_global, bars_realm)):
+    val_g = df_bar['Global_Share_ge_10_Pct'].iloc[idx]
+    val_r = df_bar['Pct_ge_10'].iloc[idx]
+    ax_a.text(val_g + 0.6, y_pos[idx] + bar_height / 2, f"{val_g:.1f}%", va='center', ha='left', fontsize=8)
+    ax_a.text(val_r + 0.6, y_pos[idx] - bar_height / 2, f"{val_r:.1f}%", va='center', ha='left', fontsize=8)
+
+ax_a.set_yticks(y_pos)
+ax_a.set_yticklabels(realms, fontsize=9)
+ax_a.set_xlim(0, 52)
+ax_a.legend(loc='lower center', bbox_to_anchor=(0.5, 1.02), ncol=2, frameon=False, fontsize=9.5)
+ax_a.spines['top'].set_visible(False)
+ax_a.spines['right'].set_visible(False)
+ax_a.text(-0.08, 1.08, 'a', transform=ax_a.transAxes, fontsize=13, fontweight='bold', va='top', ha='right')
+
+# Panel b
+ax_b = fig.add_subplot(gs[1])
+df_norm = df_pivot_realm.drop(columns=['Total_Area_km2']).div(df_pivot_realm['Total_Area_km2'], axis=0) * 100.0
+valid_cols = [c for c in sorted(df_norm.columns) if isinstance(c, (int, float, np.integer)) and c <= 45 and c > 0]
+plot_data = df_norm[valid_cols].reindex(df_pivot_realm.index)
 
 sns.heatmap(
     plot_data,
     cmap="rocket_r",
-    annot=False,
-    cbar_kws={'label': "Percentage of Realm's Migratory Area (%)", 'shrink': 0.8},
+    ax=ax_b,
+    cbar_kws={'label': "Percentage of Realm's Migratory Area (%)", 'shrink': 0.85, 'pad': 0.03},
     mask=(plot_data == 0)
 )
-plt.title("Relative Area Composition of Migratory Richness across Zoogeographic Realms", fontsize=18, pad=20, fontweight='bold')
-plt.xlabel("Seasonal-Switching Richness (Number of Migratory Species)", fontsize=13)
-plt.ylabel("Zoogeographic Realms (Ranked by Total Area)", fontsize=13)
-plt.tight_layout()
-out_fig_s2 = os.path.join(OUTPUT_DIR, "Fig_S2_Area_Normalized_Heatmap.png")
-plt.savefig(out_fig_s2, dpi=300, bbox_inches='tight')
+ax_b.set_xlabel("Seasonal-Switching Richness (Number of Migratory Species)", fontsize=9.5, labelpad=8)
+ax_b.set_ylabel("Zoogeographic Realms (Ranked by Total Area)", fontsize=9.5, labelpad=8)
+ax_b.text(-0.08, 1.05, 'b', transform=ax_b.transAxes, fontsize=13, fontweight='bold', va='top', ha='right')
+
+plt.savefig(os.path.join(OUTPUT_DIR, "FigureS2_realm_hotspot.png"), dpi=400, bbox_inches='tight')
+plt.savefig(os.path.join(OUTPUT_DIR, "FigureS2_realm_hotspot.pdf"), dpi=400, bbox_inches='tight')
 plt.close()
 
-# Report realm metrics
-print(df_realm_summary[['Realm', 'Migratory_Area_km2', 'Max_Richness', 'Pct_ge_10', 'Global_Share_ge_10_Pct']]
-      .to_string(index=False))
-mask_np = df_realm_summary['Realm'].str.contains('Nearctic|Palaearctic', case=False)
-print(f"\nNearctic + Palaearctic share of area with >= 10 species: "
-      f"{df_realm_summary[mask_np]['Global_Share_ge_10_Pct'].sum():.1f}%")
-print(f"Saved: {csv_realm_summary}, {out_fig_s2}")
+print(f"[DONE] Figure S2 saved to {OUTPUT_DIR}")
