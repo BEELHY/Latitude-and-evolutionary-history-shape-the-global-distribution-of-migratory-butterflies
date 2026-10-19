@@ -20,7 +20,6 @@ dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 # Load data
 trait_range  <- read_csv("output/trait_range.csv", show_col_types = FALSE)
 tree_sp      <- ape::read.tree("updatedata/phylogeny_matched.tre")$tip.label
-# BIO4 colour: phylogeny subset
 mean_bio4_ss <- read_csv("updatedata/species_season_metrics.csv", show_col_types = FALSE) %>%
   dplyr::filter(species %in% tree_sp) %>%
   dplyr::select(species, season, mean_bio4)
@@ -38,9 +37,9 @@ final_df <- trait_range %>%
 final_df_lat <- final_df %>%
   left_join(df_lat_sp %>% dplyr::select(species, abs_lat), by = "species")
 
-BASE_SIZE <- 7   # Nature: 5-7 pt text at the final width of 183 mm; panel labels 8 pt bold
+BASE_SIZE <- 7
 TAG_SIZE <- 8
-theme_fig2 <- theme_classic(base_size = BASE_SIZE, base_family = "Arial") +
+theme_fig2 <- theme_classic(base_size = BASE_SIZE) +
   theme(
     axis.line = element_line(linewidth = 0.3),
     axis.ticks = element_line(linewidth = 0.3),
@@ -55,25 +54,23 @@ theme_fig2 <- theme_classic(base_size = BASE_SIZE, base_family = "Arial") +
     legend.position = "top", legend.justification = "left", legend.direction = "horizontal",
     legend.margin = margin(0, 0, 0, 0), legend.box.spacing = unit(1, "mm"),
     plot.margin = margin(3, 4, 3, 3),
-    aspect.ratio = 3 / 4  # every panel 4:3 (width:height)
+    aspect.ratio = 3 / 4
   )
 
-# Vector PDF with embedded Arial: SVG (svglite) converted by librsvg, since R's Cairo PDF device is unavailable here
 save_vector_pdf <- function(plot, file, width, height) {
   svg <- tempfile(fileext = ".svg")
   ggsave(svg, plot, width = width, height = height, units = "mm", device = svglite::svglite)
   rsvg::rsvg_pdf(svg, file)
 }
 
-# Horizontal colour bar with the minimum and maximum written at its two ends (as in Fig. 1)
 end_bar <- function(lo, hi, title) {
   ggplot(data.frame(x = seq(0, 1, length.out = 256))) +
-    geom_tile(aes(x = x, y = 0, fill = x), width = 1 / 255, height = 1, linewidth = 0) +  # vector colour bar
+    geom_tile(aes(x = x, y = 0, fill = x), width = 1 / 255, height = 1, linewidth = 0) +
     scale_fill_viridis_c(guide = "none") +
     annotate("rect", xmin = 0, xmax = 1, ymin = -0.5, ymax = 0.5, fill = NA, colour = "black", linewidth = 0.2) +
-    annotate("text", x = -0.05, y = 0, label = lo, hjust = 1, size = BASE_SIZE / .pt, family = "Arial") +
-    annotate("text", x = 1.05, y = 0, label = hi, hjust = 0, size = BASE_SIZE / .pt, family = "Arial") +
-    annotate("text", x = 0.5, y = 1.4, label = title, vjust = 0, size = BASE_SIZE / .pt, family = "Arial") +
+    annotate("text", x = -0.05, y = 0, label = lo, hjust = 1, size = BASE_SIZE / .pt) +
+    annotate("text", x = 1.05, y = 0, label = hi, hjust = 0, size = BASE_SIZE / .pt) +
+    annotate("text", x = 0.5, y = 1.4, label = title, vjust = 0, size = BASE_SIZE / .pt) +
     coord_cartesian(xlim = c(0, 1), ylim = c(-0.5, 0.5), expand = FALSE, clip = "off") +
     theme_void()
 }
@@ -94,7 +91,7 @@ p2a <- ggplot() +
              alpha = 0.5, size = 0.5, stroke = 0) +
   scale_color_viridis_c(option = "viridis", na.value = "grey75") +
   scale_x_continuous(expand = expansion(mult = c(0.02, 0.02))) +
-  scale_y_continuous(limits = c(NA, 7.6), breaks = 3:7) +  # empty band at the top for the colour bar
+  scale_y_continuous(limits = c(NA, 7.6), breaks = 3:7) +
   geom_line(data = pred_pattern, aes(x = prop_mean, y = log10_range),
             color = "black", linewidth = 0.4) +
   labs(x = "Mean proportion of range in the tropics", y = lab_range,
@@ -102,6 +99,7 @@ p2a <- ggplot() +
   guides(color = "none") +
   theme_fig2 +
   theme(plot.margin = margin(3, 4, 3, 3))
+
 bio4_rng <- range(final_df$mean_bio4, na.rm = TRUE)
 p2a <- p2a + inset_element(end_bar(round(bio4_rng[1]), round(bio4_rng[2]), "Temperature seasonality"),
                            left = 0.35, right = 0.63, bottom = 0.86, top = 0.89, align_to = "panel",
@@ -138,7 +136,7 @@ p2b <- ggplot() +
   theme(legend.position = "inside", legend.position.inside = c(0.99, 0.99), legend.justification.inside = c(1, 1),
         legend.direction = "vertical")
 
-# Panel c
+# Panel c: interaction model (label strictly 'Wingspan')
 m_interact <- lmer(log10(range_km2) ~ abs_lat * log10(WS_L) + prop_within + season + (1 | species),
                     data = final_df_lat)
 
@@ -156,22 +154,21 @@ p2c <- ggplot(pred_c, aes(x = WS_L, y = fit, color = lat_group, fill = lat_group
   scale_color_viridis_d(option = "viridis", end = 0.85) +
   scale_fill_viridis_d(option = "viridis", end = 0.85) +
   scale_y_continuous(breaks = 5:7) +
-  labs(x = lab_ws("Lower wingspan"), y = lab_range,
+  labs(x = lab_ws("Wingspan"), y = lab_range,
        color = "Absolute latitude", fill = "Absolute latitude") +
   guides(color = guide_legend(nrow = 1), fill = guide_legend(nrow = 1)) +
   theme_fig2 +
   theme(legend.position = "inside", legend.position.inside = c(0.5, 0.99), legend.justification.inside = c(0.5, 1),
         legend.direction = "horizontal", legend.title.position = "top", legend.title = element_text(hjust = 0.5))
 
-# Panel d: main GAM (black only; filled = 95% CI excludes zero); two-line predictor names keep the y-axis
-# label column narrow, and the legend sits in the empty upper right of the panel
+# Panel d: main GAM
 forest_df <- read_csv("output/phylo_export/main_model_forest_data_built_ref.csv", show_col_types = FALSE) %>%
   mutate(variable = recode(variable, "Bio_4" = "Temperature\nseasonality", "Bio_15" = "Precipitation\nseasonality",
                            "HII" = "Human\ninfluence", "Trees" = "Forest", "Shrubs" = "Shrubland"),
          variable = factor(variable, levels = rev(c("Temperature\nseasonality", "Elevation",
                                                     "Precipitation\nseasonality", "Human\ninfluence",
                                                     "Cropland", "Grassland", "Shrubland", "Forest"))))
-# row positions: wider spacing for the two-line names, a gap between environment and land cover
+
 ROW_Y <- c("Temperature\nseasonality" = 9.0, "Elevation" = 7.8, "Precipitation\nseasonality" = 6.6,
            "Human\ninfluence" = 5.2, "Cropland" = 3.6, "Grassland" = 2.7, "Shrubland" = 1.8, "Forest" = 0.9)
 forest_df <- forest_df %>% mutate(y = ROW_Y[as.character(variable)])
@@ -183,7 +180,7 @@ p2d <- ggplot(forest_df, aes(x = estimate, y = y, shape = sig)) +
   scale_x_continuous(labels = scales::label_number(style_negative = "minus")) +
   scale_y_continuous(breaks = ROW_Y, labels = names(ROW_Y), expand = expansion(add = 0.5)) +
   scale_shape_manual(values = c("Significant" = 16, "Non-significant" = 21), name = NULL,
-                     breaks = c("Significant", "Non-significant"), labels = c("*P* < 0.05", "*P* ≥ 0.05")) +  # italic P (Nature style)
+                     breaks = c("Significant", "Non-significant"), labels = c("*P* < 0.05", "*P* ≥ 0.05")) +
   labs(x = "Coefficient estimate", y = NULL) +
   theme_fig2 +
   theme(axis.text.y = element_text(lineheight = 0.85),
@@ -191,11 +188,11 @@ p2d <- ggplot(forest_df, aes(x = estimate, y = y, shape = sig)) +
         legend.position = "inside", legend.position.inside = c(0.99, 0.99), legend.justification.inside = c(1, 1),
         legend.direction = "vertical")
 
-# Compose Figure 2 at the Nature double-column width (183 mm; maximum height 170 mm)
-# one 2 x 2 grid: all four panels share the same size (4:3), whatever the width of their axis labels
+# Compose Figure 2
 fig2 <- p2a + p2b + p2c + p2d + plot_layout(ncol = 2, widths = c(1, 1), heights = c(1, 1)) +
   plot_annotation(tag_levels = "a") &
-  theme(plot.tag = element_text(face = "bold", size = TAG_SIZE, family = "Arial"))
+  theme(plot.tag = element_text(face = "bold", size = TAG_SIZE))
+
 ggsave(file.path(out_dir, "Figure2_final.png"), fig2, width = 183, height = 140, units = "mm",
        dpi = 600, device = ragg::agg_png, bg = "white")
 save_vector_pdf(fig2, file.path(out_dir, "Figure2_final.pdf"), width = 183, height = 140)
@@ -203,25 +200,28 @@ cat("Saved Figure 2 to", out_dir, "\n")
 
 PANEL_W <- 5.5; PANEL_H <- 4.25; PANEL_DPI <- 400
 
-# Fig. S3: phylogenetic version of c (styled as in the Supporting Information)
-theme_s3 <- theme_classic(base_size = 12) +
-  theme(
-    plot.title = element_text(face = "bold", size = 12),
-    legend.background = element_rect(fill = alpha("white", 0.75), color = NA),
-    legend.key.size = unit(0.3, "cm"),
-    legend.text = element_text(size = 10),
-    legend.title = element_text(size = 10),
-    legend.position = "inside", legend.position.inside = c(0.82, 0.86)
-  )
-pp <- read_csv("output/phylo_export/interaction_phylo_predictions.csv", show_col_types = FALSE) %>%
-  mutate(lat_group = factor(paste0(abs_lat, "°"), levels = paste0(c(0, 20, 40, 60), "°")))
-p_s3 <- ggplot(pp, aes(x = WS_U, y = fit, colour = lat_group, fill = lat_group)) +
-  geom_ribbon(aes(ymin = lo, ymax = hi), colour = NA, alpha = 0.15) +
-  geom_line(linewidth = 1.1) +
-  scale_x_log10() +
-  scale_colour_viridis_d(option = "viridis") + scale_fill_viridis_d(option = "viridis") +
-  labs(x = "Upper wingspan (log10 cm)", y = expression(log[10] * " Range size (" * km^2 * ")"),
-       colour = "Absolute\nlatitude", fill = "Absolute\nlatitude") +
-  theme_s3
-dir.create("output/SI", showWarnings = FALSE)
-ggsave("output/SI/FigS_interaction_phylo.png", p_s3, width = PANEL_W, height = PANEL_H, dpi = PANEL_DPI, bg = "white")
+# Fig. S3: phylogenetic version of c
+s3_pred_file <- "output/phylo_export/interaction_phylo_predictions.csv"
+if (file.exists(s3_pred_file)) {
+  theme_s3 <- theme_classic(base_size = 12) +
+    theme(
+      plot.title = element_text(face = "bold", size = 12),
+      legend.background = element_rect(fill = alpha("white", 0.75), color = NA),
+      legend.key.size = unit(0.3, "cm"),
+      legend.text = element_text(size = 10),
+      legend.title = element_text(size = 10),
+      legend.position = "inside", legend.position.inside = c(0.82, 0.86)
+    )
+  pp <- read_csv(s3_pred_file, show_col_types = FALSE) %>%
+    mutate(lat_group = factor(paste0(abs_lat, "°"), levels = paste0(c(0, 20, 40, 60), "°")))
+  p_s3 <- ggplot(pp, aes(x = WS_U, y = fit, colour = lat_group, fill = lat_group)) +
+    geom_ribbon(aes(ymin = lo, ymax = hi), colour = NA, alpha = 0.15) +
+    geom_line(linewidth = 1.1) +
+    scale_x_log10() +
+    scale_colour_viridis_d(option = "viridis") + scale_fill_viridis_d(option = "viridis") +
+    labs(x = "Upper wingspan (log10 cm)", y = expression(log[10] * " Range size (" * km^2 * ")"),
+         colour = "Absolute\nlatitude", fill = "Absolute\nlatitude") +
+    theme_s3
+  dir.create("output/SI", showWarnings = FALSE)
+  ggsave("output/SI/FigS_interaction_phylo.png", p_s3, width = PANEL_W, height = PANEL_H, dpi = PANEL_DPI, bg = "white")
+}
